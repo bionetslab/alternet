@@ -184,7 +184,7 @@ python total_pipeline.py -f ../configs/Liver.yaml
 
 ### Inference for MAGNet Data
 
-The file `magnet.py`conducts the annotation and inference pipeline for MAGNet data and the file `magnet.ipynb` shows an exemplary downstream analysis.
+The file `magnet.py`conducts the annotation and inference pipeline for MAGNet data and the file `downstream_analysis.py` shows an exemplary downstream analysis with a Gene Set Enrichment Analysis via gseapy.
 
 
 ## Important Files and Folders
