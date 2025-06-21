@@ -54,7 +54,7 @@ def load_plausibility_filtered(config):
     
     filtered_iso_unique_path = op.join(results_dir_grn, as_aware_prefix + 'plausibility_filtered_iso_unique.tsv')
     grn_filt_iso_unique = pd.read_csv(filtered_iso_unique_path, sep='\t')
-    
+
     return grn_filt_iso_unique
 
 
@@ -124,7 +124,8 @@ def main():
 
     print('Load data')
     transcript_tfs, gene_tfs, targets = magnet.load_magnet_data(config, tf_list)
-    
+    #transcript_tfs, gene_tfs, targets = load_data(config, biomart, tf_list)
+
     do_gsea(config, targets)
     
 if __name__ == "__main__":
