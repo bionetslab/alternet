@@ -15,12 +15,7 @@
         <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
+    <li><a href="#installation">Installation</a></li>
     <li><a href="#usage">Usage</a></li>
     <li><a href="#important-files-and-folders">Important Files and Folders</a></li>
 
@@ -33,25 +28,55 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-AS-Aware Gene Regulatory Network inference
+Gene regulatory networks (GRNs) play a role in understanding gene interactions and their regulatory effects. They help decode biological systems by identifying how genes interact and regulate cellular processes. However, conventional GRN inference methods operate at the gene-level, overlooking transcript-level variability introduced by Alternative-Splicing.
+The goal of this pipeline is to infer gene regulatory networks that incorporate transcript-level information. This enables the discovery of regulatory mechanisms affected by alternative splicing, which are not captured in traditional gene-level analyses.
+
+## 🚀 Pipeline Workflow
+
+The main pipeline script executes the following steps:
+
+1. **Load Resources**  
+   Reads Biomart annotations and a curated list of human transcription factors (TFs).
+
+2. **Transcript Annotation Database**  
+   Builds a transcript-level annotation database using APPRIS and DIGGER to support plausibility filtering.
+
+3. **Data Preparation**  
+   Processes expression data for both canonical (gene-level) and AS-aware (transcript-level) GRN inference.
+
+   - `transcript_tfs`, `gene_tfs`, and `targets` must be Pandas DataFrames with:
+     - **columns = samples**
+     - **rows = Ensembl gene or transcript IDs**
+
+4. **GRN Inference**  
+   Infers GRNs using isoform-based and gene-based inputs. Multiple runs are aggregated for robustness.
+
+5. **Isoform Categorization**  
+   Classifies isoforms (e.g., dominant, balanced, non-dominant) based on their expression compared to other isoforms of the same gene.
+
+6. **Aggregation and Filtering**  
+   Aggregates GRNs from multiple runs and filters edges based on:
+   - Feature importance
+   - Edge frequency
+
+7. **Edge Categorization**  
+   Compares canonical and AS-aware networks to classify edges as:
+   - Common
+   - Gene-exclusive
+   - Isoform-exclusive
+
+8. **Plausibility Filtering**  
+   Filters isoform-exclusive edges based on structural and functional annotations (APPRIS, DIGGER).
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
+## Installation
 
-<!-- GETTING STARTED -->
-## Getting Started
+#### Step 1: Clone the repo
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
-### Installation
-
-#### Step 1: Clone 
-
-Clone the repo
    ```sh
    git clone https://github.com/HoffmannJuliane/SpliceAwareGRN.git
    ```
@@ -119,11 +144,10 @@ with open(path-to-config-file, 'r') as f:
 ```
 
 ### Step 3: Load Data 
-The function for the inference and annotation pipeline requires three dataframes transcript_tfs, gene_tfs and targets. The Dataframes must adher to these requirements:
-- pd.Dataframe
-- columns: samples
-- rows: genes/transcripts
-- gene/transcript identifiers: Ensembl IDs
+The function for the inference and annotation pipeline requires three dataframes: `transcript_tfs`, `gene_tfs`, and `targets`.
+`transcript_tfs`, `gene_tfs`, and `targets` must be Pandas DataFrames with:
+  - **columns = samples**
+  - **rows = Ensembl gene or transcript IDs**
 
 ### Step 4: Run Inference and Annotation Pipeline
 

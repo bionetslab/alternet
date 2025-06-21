@@ -190,21 +190,7 @@ def separate_tf_genes(data, tf_list, data_column='transcript_id', biomart_column
 
     return tfs, genes
 
-# def get_canonical(data, grouby_column='gene_id'):
-#     ''' 
-#     Groups data by gene_id and sums the expression values
 
-#     Attributes
-#     ---------------
-#     data: Dataframe; gene expression data
-#     groupby_column: str, name of column to group by
-
-#     Returns
-#     ---------------
-#     Dataframe; containing gene expression data grouped by gene_id
-#     '''   
-#     data = data.groupby(grouby_column).sum()
-#     return data
 
 def get_target_genes(data):
     ''' 
@@ -253,8 +239,6 @@ def load_data(config, biomart, tf_list):
 
 
     gene_tfs, targets = separate_tf_genes(gene_data, tf_list, data_column='gene_id', biomart_column='Gene stable ID')
-
-
 
 
     # separate transcription factors and genes

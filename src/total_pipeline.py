@@ -46,7 +46,7 @@ def inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets)
     tf_database = utils_database.create_transcipt_annotation_database(tf_list=tf_list, appris_path= config['appris'], digger_path=config['digger'])
 
 
-    print('Prepare for inference')
+    print('Prepare Data for inference')
 
     data_canonical, data_asware, target_gene_list = prepare_for_inference(transcript_tfs, gene_tfs, targets)
 

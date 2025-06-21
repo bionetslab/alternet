@@ -1,0 +1,11 @@
+appris: ../data/appris_data.appris.txt
+biomart: ../data/biomart.txt
+count_data: /data/bionets/mi34qaba/data/MAGNet/counts.csv
+digger: ../data/digger_data.csv
+nruns: 2
+parent_directory: /data/bionets/mi34qaba/
+results_dir: /data/bionets/mi34qaba/SpliceAwareGRN_MA/results/
+sample_attributes: /data/bionets/mi34qaba/data/MAGNet/phenoData.csv
+tf_list: ../data/allTFs_hg38.txt
+transcript_data: /data/bionets/mi34qaba/data/MAGNet/MAGNet_transcript/MAGNet_tpms.csv
+tissue: NF
