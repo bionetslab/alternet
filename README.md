@@ -31,7 +31,7 @@
 Gene regulatory networks (GRNs) play a role in understanding gene interactions and their regulatory effects. They help decode biological systems by identifying how genes interact and regulate cellular processes. However, conventional GRN inference methods operate at the gene-level, overlooking transcript-level variability introduced by Alternative-Splicing.
 The goal of this pipeline is to infer gene regulatory networks that incorporate transcript-level information. This enables the discovery of regulatory mechanisms affected by alternative splicing, which are not captured in traditional gene-level analyses.
 
-## 🚀 Pipeline Workflow
+## Pipeline Workflow
 
 The main pipeline script executes the following steps:
 
