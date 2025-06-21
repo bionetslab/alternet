@@ -188,7 +188,7 @@ def check_annotations(transcript_id, annotation_database):
         'Pfam ID': t_row.get('Pfam ID'),
     }
 
-    return pd.Sereis(compare_values(transcript_data, comparison_df))
+    return pd.Series(compare_values(transcript_data, comparison_df))
 
 
 

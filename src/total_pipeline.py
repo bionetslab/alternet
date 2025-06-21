@@ -9,8 +9,35 @@ import argparse
 
 
 
-def inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets, nruns):
+def inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets):
+    '''
+    Executes the full pipeline for GRN inference and annotation with alternative splicing awareness.
 
+    This function performs the following steps:
+    1. Loads required resources including biomart annotations and transcription factor list.
+    2. Creates a transcript annotation database using APPRIS and Digger data.
+    3. Prepares input data for GRN inference based on isoform- and gene-level TFs and targets.
+    4. Runs GRN inference for both canonical (gene-based) and AS-aware (transcript-based) inputs.
+    5. Performs isoform categorization for downstream filtering.
+    6. Aggregates and filters the inferred networks based on importance and frequency thresholds.
+    7. Maps edges for comparison and categorizes them as gene-exclusive, isoform-exclusive, or common.
+    8. Filters isoform-exclusive edges based on transcript plausibility.
+
+    Parameters:
+        config (dict): Configuration dictionary with file paths and parameters.
+        transcript_tfs (pd.DataFrame): Transcript-level expression data for transcription factors.
+            Columns must be sample IDs, rows must be Ensembl transcript IDs.
+        gene_tfs (pd.DataFrame): Gene-level expression data for transcription factors.
+            Columns must be sample IDs, rows must be Ensembl gene IDs.
+        targets (pd.DataFrame): Expression data of target genes.
+            Columns must be sample IDs, rows must be Ensembl gene IDs.
+
+
+    Returns:
+        pd.DataFrame: Plausibility-filtered edges found only in the isoform-aware regulatory network.
+ 
+    '''
+    
     # important files to load
     biomart = pd.read_csv(config['biomart'], sep='\t')
     tf_list = read_tf_list(config['tf_list'], biomart)
@@ -58,8 +85,7 @@ def main():
     
     # Add the file argument
     parser.add_argument('-f', type=str, help='Config File')
-    parser.add_argument('-n', type=int, help='Number of runs of grnboost')
-
+  
     # load config file
     args = parser.parse_args()
     with open(args.f, 'r') as f:

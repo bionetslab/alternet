@@ -118,28 +118,63 @@ with open(path-to-config-file, 'r') as f:
 
 ```
 
-### Step 3:
+### Step 3: Load Data 
+The function for the inference and annotation pipeline requires three dataframes transcript_tfs, gene_tfs and targets. The Dataframes must adher to these requirements:
+- pd.Dataframe
+- columns: samples
+- rows: genes/transcripts
+- gene/transcript identifiers: Ensembl IDs
 
-Run inference and annotation pipeline by calling:
+### Step 4: Run Inference and Annotation Pipeline
 
 ```python
+    from total_pipeline import *
 
-    transcript_tfs, gene_tfs, targets = load_data 
-    
-    inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets)
+    plausibility_filtered_df = inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets)
     
 ```
 
+All networks are saved under the results_dir specified in the config file by default:
+
+- aggregated AS-Aware GRN: SpliceAwareGRN/results/tissue-name/grn/tissue-name_as-aware.network_aggregated.tsv
+- aggregated gene-level GRN: SpliceAwareGRN/results/tissue-name/grn/tissue-name_canonical.network_aggregated.tsv
+- plausibility filtered isoform-unique GRN: SpliceAwareGRN/results/tissue-name/grn/tissue-name_as-aware.network_plausibility_filtered_iso_unique.tsv
 
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
+## Example Pipelines
+
+### Inference with GTEX Data
+
+If you are using GTex Data you can use the python script `total_pipeline.py` 
+
+For example with Liver samples run in shell:
+```
+python total_pipeline.py -f ../configs/Liver.yaml
+```
+
+
+
+### Inference for MAGNet Data
+
+The file `magnet.py`conducts the annotation and inference pipeline for MAGNet data and the file `magnet.ipynb` shows an exemplary downstream analysis.
+
+
 ## Important Files and Folders
 
 - `/src/arboreto_added/`: Adjusted GRNBoost for transcript-level GRN Inference
 - `create_config.py`: creates config yaml file needed as input for pipeline
+
+- `total_pipeline.py`: shows total inference and annotation pipeline
+- `inference.py`: isoform-level and gene-level GRN inference 
+- `aggregate_grnboost.py`: functions to aggregate repeated GRNs to one consenus network
+- `downstream_analysis.py`: Gene set enrichment analysis for plausibility filtered isoform-unique GRN based on gseapy
+- `load_data.py`: functions to load GTEx expression data
+- `utils_database.py`: helper functions for transcript annotation pipeline
+- `utils_network.py`: helper functions for inference pipeline and GRN processing
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

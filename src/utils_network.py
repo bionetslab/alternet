@@ -596,8 +596,6 @@ def plausibility_filtering(config, isoform_unique, isoform_categories, tf_databa
 
     as_aware_prefix = f"{config['tissue']}_as-aware.network_"
 
-
-
     isoform_unique = isoform_unique.merge(isoform_categories.loc[:, ['transcript_id', 'isoform_category']], left_on='source', right_on='transcript_id', how='left').drop(columns=['transcript_id'])
 
     isoform_unique_annotated = utils_database.merge_annotations_to_grn(isoform_unique, tf_database)
@@ -605,8 +603,7 @@ def plausibility_filtering(config, isoform_unique, isoform_categories, tf_databa
     file = op.join(results_dir_grn, as_aware_prefix + f"annotated_w_database.tsv")
     isoform_unique_annotated.to_csv(file, sep='\t', index=False)
 
-    file = op.join(results_dir_grn, as_aware_prefix + f"plausibility_filtered_iso_unique.tsv")
-    sort_pc.to_csv(file, sep='\t', index=False)
+
 
     #filter
     protein_coding = isoform_unique_annotated[isoform_unique_annotated['Protein Coding'] == True]
@@ -614,6 +611,8 @@ def plausibility_filtering(config, isoform_unique, isoform_categories, tf_databa
     protein_coding = protein_coding[protein_coding['isoform_category'] != 'dominant']
     sort_pc = protein_coding.sort_values(by=['frequency', 'median_importance'], ascending=[False, False])
 
+    file = op.join(results_dir_grn, as_aware_prefix + f"plausibility_filtered_iso_unique.tsv")
+    sort_pc.to_csv(file, sep='\t', index=False)
     return sort_pc
 
 
