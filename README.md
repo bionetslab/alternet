@@ -90,7 +90,21 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+### Step 1: Create Config File
+  The config file saves all paths for the data needed for the transcript and annotation pipeline. A template of the config file is saved under /configs. With the script `create_config.py`you can create your own config based on the data you want to use.
+
+  To create the config run:
+  ```
+  python create_config.py \
+    --count_data path-to-gene-counts \
+    --sample_attributes path-to-sample-attributes \
+    --transcript_data path-to-transcript-counts \
+    --parent_directory path-to-parent-directory \
+    --results_dir /data/bionets/mi34qaba/SpliceAwareGRN/results/ \
+    --tissue tissue_name 
+  ```
+
+
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -99,6 +113,7 @@ Use this space to show useful examples of how a project can be used. Additional 
 ## Important Files and Folders
 
 - `arboreto_added/`: Adjusted GRNBoost for transcript-level GRN Inference
+- `create_config.py`: creates config yaml file needed as input for pipeline
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
