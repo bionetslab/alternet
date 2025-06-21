@@ -193,10 +193,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# data folder
-data/*
-!data/.gitkeep
 
 # pixi environments
 .pixi
 *.egg-info
+data/appris_data.appris.txt
+data/digger_data.csv

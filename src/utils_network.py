@@ -1,0 +1,497 @@
+import pandas as pd 
+from collections import defaultdict
+import numpy as np
+
+
+
+
+def filter_aggregate(data, threshold_importance=0.2, threshold_frequency=5, importance_column='median_importance'):
+    '''
+    Filter out the top threshold_importance % of data based on the importance column and the threshold frequency of the edges. 
+
+    Parameters:
+    
+        data: Dataframe, contains the edges of the grn inference and their importance and frequency of appearance after aggregation
+        threshold_importance: float, the percentage of the data to be filtered out based on the importance column
+        threshold_frequency: int, the minimum number of times an edge should appear in the grn inference
+        importance_column: str, the column name of the importance values
+
+
+    Returns:
+        
+        Dataframe, filtered data based on the threshold_importance and threshold_frequency
+    '''
+    #only select edges that have been found in threshold_frequency number of times in grn inference
+    freq_mask = data['frequency'] >= threshold_frequency
+    
+    # get value for threshold importance
+    importance_threshold = data.loc[freq_mask, importance_column].quantile(1 - threshold_importance)
+    
+    return data.loc[freq_mask & (data[importance_column] >= importance_threshold)]
+
+def filter_aggregated_networks(asaware_grn, canonical_grn, threshold_frequency=5, threshold_importance=0.3, importance_column='median_importance'):
+    '''
+    Filter out the top threshold_importance % of data based on the importance column and the threshold frequency of the edges. 
+
+    Parameters:
+    
+        asaware_grn: Dataframe, contains the edges of the grn inference and their importance and frequency of appearance after aggregation
+        canonical: Dataframe, contains the edges of the grn inference and their importance and frequency of appearance after aggregation
+        threshold_importance: float, the percentage of the data to be filtered out based on the importance column
+        threshold_frequency: int, the minimum number of times an edge should appear in the grn inference
+        importance_column: str, the column name of the importance values
+
+
+    Returns:
+        
+        (asaware_grn, canonical_grn): Tuple, Dataframes after applying filtering
+    '''
+
+    asaware_grn = filter_aggregate(asaware_grn, threshold_importance, threshold_frequency, importance_column)
+    canonical_grn = filter_aggregate(canonical_grn, threshold_importance, threshold_frequency, importance_column)
+    
+    return asaware_grn, canonical_grn
+
+
+def biomart_mapping(net, biomart, source_column='TF', target_column='target', as_aware=True):
+    '''
+    maps biomart gene name to GEX gene names 
+
+    Parameters:
+        net: Dataframe; gene regulatory network
+        biomart: Dataframe; biomart data containing gene/transcript names and gene/transcript ids
+
+    Returns:
+    
+        net: Dataframe; gene regulatory network with gene/transcript names mapped to gene/transcript ids
+    '''
+    # Pre-select and de-duplicate biomart annotations
+    biomart_source = biomart[["Transcript stable ID", "Gene stable ID", "Transcript name", "Gene name"]]
+    biomart_target = biomart[["Gene stable ID", "Gene name"]].drop_duplicates("Gene stable ID")
+
+
+    # Prepare masks 
+    is_source_transcript = net[source_column].str.startswith('ENST')
+    is_source_gene = net[source_column].str.startswith('ENSG')
+    is_target_gene = net[target_column].str.startswith('ENSG')
+
+
+    # Map source transcript -> names
+    st_sub = net[is_source_transcript]
+    st_sub = st_sub.merge(biomart_source, left_on=source_column, right_on="Transcript stable ID", how="left")
+
+    # For st_sub where target is gene
+    st_sub = st_sub.merge(biomart_target, left_on=target_column, right_on="Gene stable ID", how="left", suffixes=('_source', '_target'))
+
+
+    # Map source gene -> names
+    sg_sub = net[is_source_gene]
+    sg_sub = sg_sub.merge(biomart_source.drop_duplicates("Gene stable ID"), left_on=source_column, right_on="Gene stable ID", how="left")
+
+    # For sg_sub where target is gene
+    sg_sub = sg_sub.merge(biomart_target, left_on=target_column, right_on="Gene stable ID", how="left", suffixes=('_source', '_target'))
+
+    # Combine
+    net = pd.concat([st_sub, sg_sub], ignore_index=True)
+
+    # Rename columns uniformly
+    net = net.rename(columns={
+        "Transcript stable ID": "source_transcript",
+        "Gene stable ID_source": "source_gene",
+        "Gene stable ID_target": "target_gene",
+        "Transcript name": "source_transcript_name",
+        "Gene name_source": "source_gene_name",
+        "Gene name_target": "target_gene_name"
+    })
+
+    return net
+
+
+
+def add_edge_key(df, biomart, key='edge_key', type='AS', source_column='TF', target_column='target'):
+    '''
+    Function that adds edge to be able to compare the edges of the AS-Aware network and the canonical network
+
+    Parameters:
+
+        df: dataframe with edges of grn inference
+        biomart: file, to be able to map gene_ids to transcript_ids
+        key: str, name of edge key
+        type: str, determines if working with AS-Aware/transcripts or canonical/genes
+
+    Returns:
+    
+        dataframe with added column for edge key 
+
+    '''
+    df = biomart_mapping(df, biomart, source_column=source_column, target_column=target_column)
+
+    # Pre-allocate columns (faster than assigning one-by-one)
+    df = df.assign(
+        type=type,
+        **{key: df['source_gene'].astype(str) + '_' + df[target_column].astype(str)}
+    )
+
+    # Small sanity check
+    if df[key].isnull().any():
+        raise ValueError(f"Column '{key}' contains NaN values!")
+
+    return df
+
+
+
+
+def get_common_edges(gene_grn, transcript_grn, path=None, save=False):
+    ''' 
+    computes overlapping network between gene regulatory network and transcript regulatory network
+    
+    Parameters:
+
+        gene: Dataframe; Gene regulatory network containing only genes 
+        transcript: Dataframe, transcript regulatory network containing genes and transcript but only transcripts as tfs
+        path: path to save network 
+    
+    Returns:
+    
+        overlapping network, containing all edges present in gene regulatory network and in transcript regulatory network 
+    ''' 
+    
+    # Use set intersection for faster membership checking
+    gene_edges = set(gene_grn['edge_key'])
+    transcript_edges = set(transcript_grn['edge_key'])
+
+    common_edges = gene_edges.intersection(transcript_edges)
+
+    # Only keep rows with common edge_keys
+    overlap_gene_in_t = transcript_grn[transcript_grn['edge_key'].isin(common_edges)]
+    overlap_gene_g = gene_grn[gene_grn['edge_key'].isin(common_edges)]
+
+    # Merge results
+    overlap = pd.concat([overlap_gene_in_t, overlap_gene_g], ignore_index=True)
+
+    if save and path:
+        overlap.to_csv(path, sep='\t', index=False)
+
+    return overlap
+
+
+def get_diff(gene_grn, transcript_grn, path=None, save=False):
+    ''' 
+    computes two networks with the edges that were found only by the gene regulatory network or transcript regulatory network
+    
+    Parameters:
+        gene: Dataframe; Gene regulatory network containing only genes 
+        transcript: Dataframe, transcript regulatory network containing genes and transcript but only transcripts as tfs
+        path: str, path to save network
+        save: bool, flag if networks should be saved 
+
+    Returns:
+        Dataframe: edges only found in canonical network, Dataframe: edges only found in as-aware network
+    '''
+    # Convert edge_keys to sets for faster difference operation
+    gene_edges = set(gene_grn['edge_key'])
+    transcript_edges = set(transcript_grn['edge_key'])
+
+    # Get the differences using set operations
+    diff_gene_edges = gene_edges - transcript_edges
+    diff_transcript_edges = transcript_edges - gene_edges
+
+    # Filter rows based on the set differences
+    diff_gene = gene_grn[gene_grn['edge_key'].isin(diff_gene_edges)]
+    diff_transcript = transcript_grn[transcript_grn['edge_key'].isin(diff_transcript_edges)]
+
+    # Save if required
+    if save and path:
+        diff_transcript.to_csv(f"{path}transcript_level_only.tsv", sep='\t', index=False, header=True)
+        diff_gene.to_csv(f"{path}gene_level_only.tsv", sep='\t', index=False, header=True)
+
+    return diff_gene, diff_transcript
+
+
+
+def gene_isoform_mapping(data, gene_column='gene_id', transcript_column='transcript_id'):
+    ''' 
+    Maps isoforms to genes
+
+    Attributes
+    
+        data: Dataframe; contains gene and transcript ID columns
+        gene_column: str, name of column with gene IDs
+        transcript_column: str, name of column with transcript IDs
+
+    Returns
+    
+        Dataframe; with gene to isoform mapping
+    '''   
+    # Group by gene_column and aggregate transcript IDs into lists
+    gene_isoform_map = data.groupby(gene_column)[transcript_column].agg(['unique', 'count']).reset_index()
+
+    # Convert to a dictionary format
+    isoform_mapping = {
+        gene: {'isoforms': isoforms.tolist(), 'nr_isoforms': count}
+        for gene, isoforms, count in zip(gene_isoform_map[gene_column], gene_isoform_map['unique'], gene_isoform_map['count'])
+    }
+
+    return isoform_mapping
+
+
+
+def get_isoform_distribution(tfs, grn, tf_columns = ['transcript_id', 'gene_id'], source_column = 'source', target_column='target'):
+    
+    """
+    Integrates transcription factor (TF) isoform information into a gene regulatory network (GRN) 
+    and determines how many source nodes (transcripts) map to the same gene.
+
+    Parameters:
+    
+        tfs : pd.DataFrame
+            A DataFrame containing transcript and gene information for transcription factors (TFs).
+        grn : pd.DataFrame
+            The gene regulatory network (GRN), where the "source" column represents the transcript.
+        tf_columns : list, optional (default=['transcript_id', 'gene_id'])
+            Column names specifying transcript and gene identifiers in the TF DataFrame.
+
+    Returns:
+    
+        pd.DataFrame
+            A modified GRN DataFrame with an added 'nr_isoforms' column, which indicates 
+            the number of isoforms associated with each source gene.
+
+    """
+    grn_og = grn.copy(deep=True) 
+    # Map gene to isoforms
+    tfs_for_gene_mapping = tfs.loc[:, tf_columns]
+    gene_mapping_tfs = gene_isoform_mapping(tfs_for_gene_mapping)
+    gene_mapping_tfs = pd.DataFrame.from_dict(gene_mapping_tfs, orient='index').reset_index(names=['Gene'])
+    gene_mapping_short = gene_mapping_tfs[['Gene', 'nr_isoforms']]
+
+    # Separate the AS-aware and canonical networks
+    as_aware_overlap = grn[grn[source_column].str.startswith('ENST')]
+    can_overlap = grn[grn[source_column].str.startswith('ENSG')]
+    
+    # Ensure no data loss
+    if len(as_aware_overlap) + len(can_overlap) != len(grn):
+        raise ValueError('Invalid source ids in GRN!')
+
+    # Get isoform distribution for AS-aware network
+    if not as_aware_overlap.empty:
+        as_aware_overlap = as_aware_overlap.merge(
+            tfs_for_gene_mapping[['transcript_id', 'gene_id']], left_on=source_column, right_on='transcript_id', how='left'
+        ).drop(columns=['transcript_id'])
+        as_aware_overlap = as_aware_overlap.merge(
+            gene_mapping_short, left_on='gene_id', right_on='Gene', how='left'
+        ).drop(columns=['Gene'])
+        
+        if as_aware_overlap['nr_isoforms'].isnull().any():
+            raise ValueError('Invalid Transcript Ids, cannot be mapped to source in AS-aware network.')
+
+    # Get isoform distribution for canonical network
+    if not can_overlap.empty:
+        can_overlap['gene_id'] = can_overlap[source_column]
+        can_overlap = can_overlap.merge(
+            gene_mapping_short, left_on='gene_id', right_on='Gene', how='left'
+        ).drop(columns=['Gene'])
+        
+        if can_overlap['nr_isoforms'].isnull().any():
+            raise ValueError('Invalid Gene Ids, cannot be mapped to source in Canonical network.')
+
+    # Combine both AS-aware and canonical network data
+    if can_overlap.empty:
+        grn = as_aware_overlap
+    elif as_aware_overlap.empty:
+        grn = can_overlap
+    else:
+        grn = pd.concat([as_aware_overlap, can_overlap], ignore_index=True)
+
+    # Ensure no edges are lost in the process
+    if len(grn) != len(grn_og):
+        raise ValueError('Processing resulted in lost edges.')
+
+    return grn
+
+
+
+
+def isoform_categorization(transcript_tfs, gene_tfs, threshold_dominance=90, threshold_balanced=15):
+    """
+    Categorizes transcript isoforms based on their contribution to total gene expression.
+
+    This function calculates the percentage of gene expression contributed by each isoform 
+    and classifies them into one of four categories: 'dominant', 'balanced', 'semi-dominant', 
+    or 'non-dominant'. 
+
+    Parameters
+        transcript_tfs : pd.DataFrame
+            A DataFrame containing transcript expression data with the following columns:
+            - 'transcript_id': Unique identifier for each transcript isoform.
+            - 'gene_id': Identifier for the gene associated with the transcript.
+            - Expression columns: Multiple columns representing expression values for different samples.
+        gene_tfs : pd.DataFrame
+            A DataFrame containing gene expression data with the following columns:
+            - 'gene_id': Identifier for the gene associated with the transcript.
+            - Expression columns: Multiple columns representing expression values for different samples.
+
+        threshold_dominance : int, optional (default=85)
+            If an isoform contributes more than this percentage of the total gene expression, 
+            it is classified as 'dominant'.
+
+        threshold_balanced : int, optional (default=15)
+            If the standard deviation of isoform expression percentages within a gene is below 
+            this threshold, the isoforms are classified as 'balanced'.
+
+    Returns:
+    
+    pd.DataFrame
+        A DataFrame with the following additional columns:
+        - 'median_expression_iso': Median expression value of the isoform.
+        - 'median_expression_gene': Total median expression of the gene; sum of median_expression_iso of respectively mapped isoforms.
+        - 'percentage': The contribution of each isoform to the total gene expression.
+        - 'max_percentage': The highest isoform expression percentage for the gene.
+        - 'min_percentage': The lowest isoform expression percentage for the gene.
+        - 'std_percentage': The standard deviation of isoform expression percentages for the gene.
+        - 'isoform_category': The classification of the isoform as:
+            - 'dominant': If an isoform contributes more than `threshold_dominance%` of total gene expression.
+            - 'balanced': If the standard deviation of expression percentages within the gene is below `threshold_balanced`.
+            - 'semi-dominant': If an isoform has the highest percentage but does not exceed `threshold_dominance%`.
+            - 'non-dominant': All other cases.
+    """
+
+    expression_columns = transcript_tfs.columns[2:]
+    df = transcript_tfs.copy(deep=True)
+    df['sum_transcript_expression'] = df[expression_columns].sum(axis=1)
+
+    isoform_expression = df.copy(deep=True).loc[:, ['transcript_id', 'gene_id', 'sum_transcript_expression']]
+
+
+    expression_columns = gene_tfs.columns[1:]
+    df = gene_tfs.copy(deep=True)
+    df['sum_gene_expression'] = df[expression_columns].sum(axis=1)
+
+    gene_expression = df.copy(deep=True).loc[:,['gene_id', 'sum_gene_expression']]
+    
+    isoform_categorization = pd.merge(isoform_expression, gene_expression, on='gene_id', suffixes=('_iso', '_gene'))
+    isoform_categorization['percentage'] = isoform_categorization['sum_transcript_expression'] / isoform_categorization['sum_gene_expression'] * 100
+    
+    isoform_categorization['max_percentage'] = isoform_categorization.groupby('gene_id')['percentage'].transform('max')
+    isoform_categorization['min_percentage'] = isoform_categorization.groupby('gene_id')['percentage'].transform('min')
+    isoform_categorization['std_percentage'] = isoform_categorization.groupby('gene_id')['percentage'].transform('std')
+
+    def classify_isoform(row):
+
+        if row['percentage'] == row['max_percentage'] and row['percentage'] > threshold_dominance:
+            return 'dominant'
+        elif row['std_percentage'] < threshold_balanced:
+            return 'balanced'
+        # elif row['percentage'] == row['max_percentage']: 
+        #     return 'semi-dominant'
+        else:
+            return'non-dominant'
+
+    isoform_categorization['isoform_category'] = isoform_categorization.apply(classify_isoform, axis=1)
+    
+    return isoform_categorization
+
+
+def get_gene_cases(df):
+    '''
+    Categorizes genes based on their isoform classifications.
+
+    Categorization rules:
+    - If at least one isoform is classified as 'dominant', the gene is labeled as 'dominant'.
+    - If all isoforms are 'balanced', the gene is labeled as 'balanced'.
+    - Otherwise, the gene is labeled as 'non-dominant'.
+
+    Paramters
+        df (pd.DataFrame): DataFrame containing columns:
+            - 'gene_id' (str): The identifier for the gene.
+            - 'isoform_category' (str): The classification of each isoform.
+
+    Returns
+    
+        pd.DataFrame: A DataFrame with two columns:
+            - 'gene_id' (str): The gene identifier.
+            - 'isoform_category' (str): The assigned category for the gene.
+    '''
+    def categorize_gene_cases(categories):
+        
+        if any(cat == 'dominant' for cat in categories):
+            return 'dominant'
+        elif all(cat == 'balanced' for cat in categories):
+            
+            return 'balanced'
+        else: 
+            return 'non-dominant'
+    gene_cases = df.groupby('gene_id')['isoform_category'].apply(categorize_gene_cases).reset_index()
+    gene_cases.rename(columns={'isoform_category' : 'gene_case'}, inplace=True)
+
+    return gene_cases
+
+
+def find_transcript(transcript_id, AS, common):
+    """
+    Check in which of the DataFrames the given transcript is present.
+    
+    Parameters
+        transcript_id (str): The transcript ID to search for.
+        AS, common (pd.DataFrame):dataframes to check.
+
+    
+    Returns:
+        dict: A dictionary indicating the presence of the transcript in each dataframe.
+    """
+
+    presence = {
+        'AS': transcript_id in AS['source'].values,
+        'common': transcript_id in common['source'].values
+    }
+
+    return presence
+    
+def find_gene(gene_id, AS, CAN, common, source_column = 'TF'):
+    """
+    Check in which of the DataFrames the given gene is present.
+    
+    Parameters
+        gene_id (str): The transcript ID to search for.
+        AS, CAN, common (pd.DataFrame): dataframes to check.
+
+    
+    Returns:
+        dict: A dictionary indicating the presence of the transcript in each dataframe.
+    """
+
+    presence = {
+        'AS': gene_id in AS['source_gene'].values,
+        'CAN' : gene_id in CAN[source_column].values,
+        'common': gene_id in common[source_column].values
+    }
+
+    return presence
+    
+def get_isoforms(gene_id, gene_iso_mapping):
+    '''
+    Returns all isoforms mapped to one gene
+
+    Paramters:
+        gene_id: str, Ensemble Gene ID 
+        gene_iso_mapping: df, dataframe with gene isoform mappings
+
+    Returns
+        List of all isoforms mapped to specific gene
+    '''
+    isoforms = gene_iso_mapping[gene_id]['isoforms']
+    return isoforms
+
+def get_isoform_category(data, transcript_id):
+    '''
+    Retrieve the isoform category for a given transcript ID
+
+    Parameters:
+        data: DataFrame, contains transcript-related information
+        transcript_id: str, transcript ID to search for
+
+    Returns:
+        str or None; the isoform category if found, otherwise None
+    '''
+    result = data.loc[data['transcript_id'] == transcript_id, 'isoform_category']
+    return result.iloc[0] if not result.empty else None
