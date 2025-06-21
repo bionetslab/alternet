@@ -34,14 +34,14 @@ class TissueNotFoundException(Exception):
     pass
 
 
-def retrieve_GTEX_tissue_sampleids(gtex_annotation_file, tissue='Liver'):
+def retrieve_GTEX_tissue_sampleids(annotation_file, tissue='Liver'):
     ''' 
     Reads the annotation file to filter out samples that belong to the specified tissue.
     If tissue is not found it raises an TissueNotFoundException
 
     Attributes
     ---------------
-    gtex_annotation_file: str; path to annotation file
+    annotation_file: str; path to annotation file
     tissue: str, tissue type
 
 
@@ -51,7 +51,7 @@ def retrieve_GTEX_tissue_sampleids(gtex_annotation_file, tissue='Liver'):
     '''
 
     print('Retrieving tissue sample IDs')
-    sample_meta = pd.read_csv(gtex_annotation_file, sep='\t')
+    sample_meta = pd.read_csv(annotation_file, sep='\t')
     sub = sample_meta.loc[:, ['SAMPID', 'SMTS']] # SMTS == tissue type
     try:
         sub = sub[sub.SMTS == tissue]
@@ -239,17 +239,17 @@ def load_data(config, biomart, tf_list):
 
     # Retrieve tissue sample IDs
     
-    tissue_ids = retrieve_GTEX_tissue_sampleids(config['gtex_sample_attributes'], tissue=config['tissue'])
+    tissue_ids = retrieve_GTEX_tissue_sampleids(config['sample_attributes'], tissue=config['tissue'])
     
 
     # load transcript data
-    transcript_data = read_GTEX_transcript_expression(config['gtex_transcript_data'], tissue_ids)
+    transcript_data = read_GTEX_transcript_expression(config['transcript_data'], tissue_ids)
     transcript_data = clean_GTEX_tissue_transcript_counts(transcript_data, biomart)
 
 
     # load gene data
     gene_ids = transcript_data['gene_id'].unique()
-    gene_data = read_GTEX_gene_expression(config['gtex_count_data'], tissue_ids, gene_ids, headers=['Name'])
+    gene_data = read_GTEX_gene_expression(config['count_data'], tissue_ids, gene_ids, headers=['Name'])
 
 
     gene_tfs, targets = separate_tf_genes(gene_data, tf_list, data_column='gene_id', biomart_column='Gene stable ID')

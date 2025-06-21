@@ -199,3 +199,5 @@ cython_debug/
 *.egg-info
 data/appris_data.appris.txt
 data/digger_data.csv
+configs/Liver.yaml
+results/

@@ -4,12 +4,33 @@ import numpy as np
 
 
 
-def create_transcipt_annotation_database(tf_list, biomart_digger_mapping, appris_path, diffuse_path, digger_path):
+def create_transcipt_annotation_database(tf_list, biomart_digger_mapping, appris_path, digger_path):
+    '''
+    Creates an annotation database for transcription factor (TF) isoforms by integrating data from 
+    APPRIS and DIGGER sources.
+
+    Parameters:
+
+        tf_list : pd.DataFrame
+            A DataFrame containing transcript-level information for transcription factors, 
+            including a 'Transcript stable ID' column. May include an 'index' column that will be dropped.
+
+        appris_path : str
+            Path to a tab-separated file containing APPRIS annotations for transcripts.
+
+        digger_path : str
+            Path to a CSV file containing DIGGER annotations including domain mappings to transcripts.
+
+    Returns
+   
+        pd.DataFrame
+            A merged DataFrame that includes original TF transcript information along with additional 
+            functional annotations from APPRIS and DIGGER, aggregated at the transcript level.
+    '''
     
     appris_df = pd.read_csv(appris_path, sep='\t')
-    diffuse = pd.read_csv(diffuse_path, sep='\t')
     digger = pd.read_csv(digger_path)
-    biomart = pd.read_csv(biomart_digger_mapping, sep='\t')
+
 
     # preprocessing
     tf_database_og = tf_list.drop(columns=['index'])
@@ -30,17 +51,25 @@ def create_transcipt_annotation_database(tf_list, biomart_digger_mapping, appris
 
 
 def get_unique_items(transcript_items, related_df, column_name):
-    """
+    '''
     Find items that are present only in the transcript and not in related isoforms.
 
     Parameters:
-    - transcript_items (list): List of items from the transcript (e.g., exon IDs, Pfam IDs).
-    - related_df (pd.DataFrame): DataFrame of related transcripts.
-    - column_name (str): The name of the column in related_df containing the comparable lists.
+
+        transcript_items : list
+            List of items from the transcript (e.g., exon IDs, Pfam IDs).
+
+        related_df : pd.DataFrame
+            DataFrame of related transcripts.
+
+        column_name : str
+            The name of the column in related_df containing the comparable lists.
 
     Returns:
-    - list: Items that are unique to the input transcript.
-    """ 
+    
+        list
+            Items that are unique to the input transcript.
+    '''
     if not isinstance(transcript_items, list):
         return []
     
@@ -59,47 +88,72 @@ def get_unique_items(transcript_items, related_df, column_name):
 
 
 def compare_values(transcript_data, related_transcripts):
-    """
-    This function combines the 'Exon stable ID', 'Pfam ID', and 'Go terms' from a given transcript dictionary and a DataFrame
-    of related isoforms and returns a dictionary with unique values for each of these columns.
+    '''
+    Compares 'Exon stable ID' and 'Pfam ID' from a transcript dictionary and a DataFrame
+    of related isoforms, and returns a dictionary with unique values for each of these columns.
 
     Parameters:
-    - transcript_dict (dict): Dictionary containing 'Exon stable ID', 'Pfam ID', and 'Go terms' for a single transcript.
-    - isoforms_df (pd.DataFrame): DataFrame containing related isoforms with 'Exon stable ID', 'Pfam ID', and 'Go terms' columns.
+
+        transcript_dict : dict
+            Dictionary containing 'Exon stable ID' and 'Pfam ID' for a single transcript.
+
+        isoforms_df : pd.DataFrame
+            DataFrame containing related isoforms with 'Exon stable ID' and 'Pfam ID' columns.
 
     Returns:
-    - dict: A dictionary with keys 'unique_exons', 'unique_pfam', 'unique_go_terms', containing lists of unique values.
-    """
+    
+        dict
+            A dictionary with keys 'unique_exons' and 'unique_pfam', containing lists of unique values.
+
+    
+    '''
+
 
     for col, unique_key in [('Exon stable ID', 'unique Exon stable ID'),
-                            ('Pfam ID', 'unique Pfam ID'),
-                            ('GO term', 'unique Go term')]:
+                            ('Pfam ID', 'unique Pfam ID')]:
         transcript_data[unique_key] = get_unique_items(transcript_data.get(col), related_transcripts, col)
     return transcript_data
 
 
-def check_plausibility(transcript_id, annotation_database):
-    '''
-    Calculate the plausibility score of a transcript being part of a regulatory edge.
+def check_annotations(transcript_id, annotation_database):
 
-    Paramters:
-    transcript_id (str) : Ensembl ID of the transcript
-    annotation_database: Database containing Appris, Digger, Diffuse and Ensembl data
+    '''
+    Get the available annotations of the transcript and compile a unique list of exon IDs and Pfam IDs.
+
+    Parameters:
+
+        transcript_id : str
+            Ensembl ID of the transcript.
+
+        annotation_database : pd.DataFrame
+            DataFrame containing APPRIS, DIGGER, and Ensembl annotation data.
 
     Returns:
-    float: Plausibility score
+    
+        dict
+            A dictionary containing all annotations of the transcript, including unique exon and Pfam IDs.
+  
     '''
 
     transcript = annotation_database[annotation_database['Transcript stable ID'] == transcript_id]
     
     if transcript.empty:
-        return None
+        # return same structure with None values if transcript not found
+        return pd.Series({
+            'Protein Coding': False,
+            'Transcript type': None,
+            'APPRIS Annotation': None,
+            'Exon stable ID': None,
+            'unique Exon stable ID': None,
+            'Pfam ID': None,
+            'unique Pfam ID': None
+        })
     
     t_row = transcript.iloc[0]
 
     if t_row['Transcript type'] != 'protein_coding':
         # no further investigation because not plausible
-        return {
+        return pd.Series({
             'Protein Coding': False,
             'Transcript type': t_row.get('Transcript type'),
             'APPRIS Annotation': t_row.get('APPRIS Annotation'),
@@ -107,10 +161,8 @@ def check_plausibility(transcript_id, annotation_database):
             'Exon stable ID': t_row.get('Exon stable ID'),
             'unique Exon stable ID': None,
             'Pfam ID': t_row.get('Pfam ID'),
-            'unique Pfam ID': None,
-            'Go term': t_row.get('GO term'),
-            'unique Go term': None,
-        }
+            'unique Pfam ID': None
+        })
     
     gene_id = t_row['Gene stable ID']
     related_transcripts = annotation_database[
@@ -134,43 +186,60 @@ def check_plausibility(transcript_id, annotation_database):
         'Trifid Score': t_row.get('Trifid Score'),
         'Exon stable ID': t_row.get('Exon stable ID'),
         'Pfam ID': t_row.get('Pfam ID'),
-        'Go term': t_row.get('GO term'),
     }
 
-    return compare_values(transcript_data, comparison_df)
+    return pd.Sereis(compare_values(transcript_data, comparison_df))
 
 
-def extract_transcript_info(transcript, annotation_database):
-    result = check_plausibility(transcript, annotation_database)
-    if result is not None:
-        return pd.Series(result)
-    else:
-        # return same structure with None values if transcript not found
-        return pd.Series({
-            'Protein Coding': False,
-            'Transcript type': None,
-            'APPRIS Annotation': None,
-            'Exon stable ID': None,
-            'unique Exon stable ID': None,
-            'Pfam ID': None,
-            'unique Pfam ID': None,
-            'Go term': None,
-            'unique Go term': None,
-        })
-    
 
 def build_transcript_annotation_table_for_unique_tfs(unique_tfs, annotation_database):
+    '''
+    Build a transcript-level annotation table for a set of unique transcription factor (TF) isoforms.
+
+    Parameters:
+
+        unique_tfs : list
+            List of Ensembl transcript IDs corresponding to unique TF isoforms.
+
+        annotation_database : pd.DataFrame
+            DataFrame containing APPRIS, DIGGER, and Ensembl annotation data.
+
+    Returns:
+    
+        pd.DataFrame
+            DataFrame indexed by transcript ID, containing annotation information for each TF isoform.
+
+    
+    '''
     # Precompute annotations for all transcripts
     annotations = []
     for tid in unique_tfs:
-        annot = extract_transcript_info(tid, annotation_database)
+        annot = check_annotations(tid, annotation_database)
         annot['Transcript stable ID'] = tid
         annotations.append(annot)
 
     annotation_df = pd.DataFrame(annotations).set_index('Transcript stable ID')
     return annotation_df
 
+
 def merge_annotations_to_grn(grn, annotation_database):
+    '''
+    Merge transcript-level annotations into a gene regulatory network (GRN) based on source transcript IDs.
+
+    Parameters:
+
+        grn : pd.DataFrame
+            DataFrame representing the gene regulatory network, containing a 'source' column with transcript IDs.
+
+        annotation_database : pd.DataFrame
+            DataFrame containing APPRIS, DIGGER, and Ensembl annotation data.
+
+    Returns:
+    
+        pd.DataFrame
+            GRN DataFrame with additional columns from the annotation database merged on the 'source' transcript ID.
+
+    '''
 
     unique_transcripts = grn['source'].unique()
     annot_df = build_transcript_annotation_table_for_unique_tfs(unique_transcripts, annotation_database)

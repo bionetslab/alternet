@@ -56,6 +56,7 @@ def aggregate_and_save(results_dir_grn, prefix, nruns, type='as-aware_'):
     grn = read_grn_files(results_dir_grn, prefix, nruns)
     aggregate_df = aggregate_results(grn)
     aggregate_df.to_csv(op.join(results_dir_grn, prefix + 'aggregated.tsv'), sep='\t', index=False)
+    return aggregate_df
 
 
 def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_list, aggregate=True):
@@ -127,9 +128,12 @@ def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_l
     if aggregate:
         print('Aggregate results')
 
-        aggregate_and_save(results_dir_grn, as_aware_prefix, nruns, type='as-aware_')
-        aggregate_and_save(results_dir_grn, canonical_prefix, nruns, type='canonical_')
+        as_aware = aggregate_and_save(results_dir_grn, as_aware_prefix, nruns, type='as-aware_')
+        canoncial = aggregate_and_save(results_dir_grn, canonical_prefix, nruns, type='canonical_')
         print('Aggregated results saved to:', results_dir_grn)
+        return as_aware, canoncial
+    
+    return grn1, grn2
 
 if __name__ == "__main__":
     

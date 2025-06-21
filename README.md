@@ -112,7 +112,7 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
 
 ## Important Files and Folders
 
-- `arboreto_added/`: Adjusted GRNBoost for transcript-level GRN Inference
+- `/src/arboreto_added/`: Adjusted GRNBoost for transcript-level GRN Inference
 - `create_config.py`: creates config yaml file needed as input for pipeline
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
