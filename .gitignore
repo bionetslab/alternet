@@ -192,3 +192,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# data folder
+data/*
+!data/.gitkeep
+
+# pixi environments
+.pixi
+*.egg-info
