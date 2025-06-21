@@ -33,12 +33,6 @@ The goal of this pipeline is to infer gene regulatory networks that incorporate 
 
 ## Pipeline Workflow
 
-<br />
-<div align="center">
-  <a href="https://github.com/github_username/repo_name">
-    <img src="mi34qaba/SpliceAwareGRN/figures/MA_pipeline_page-0001.jpg" alt="Logo" width="80" height="80">
-  </a>
-
 The main pipeline script executes the following steps:
 
 1. **Load Resources**  
