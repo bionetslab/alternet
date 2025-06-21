@@ -11,6 +11,7 @@ def main():
     parser.add_argument('--transcript_data', required=True, help='Path to GTEx transcript TPM file')
     parser.add_argument('--parent_directory', required=True, help='Path to parent directory')
     parser.add_argument('--results_dir', required=True, help='Path to results directory')
+    parser.add_argument('--nruns', type=int, required=True, help='Number of inference repetitions')
     parser.add_argument('--tissue', required=True, help='Tissue name')
     
 
@@ -26,6 +27,7 @@ def main():
         'parent_directory': args.parent_directory,
         'results_dir': args.results_dir,
         'tf_list': '../data/allTFs_hg38.txt',
+        'nruns': args.nruns,
         'tissue': args.tissue
     }
 
@@ -47,5 +49,6 @@ python create_config.py \
   --transcript_data /data/bionets/mi34qaba/data/GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_tpm.gct \
   --parent_directory /data/bionets/mi34qaba/ \
   --results_dir /data/bionets/mi34qaba/SpliceAwareGRN/results/ \
+  --nruns 10 \
   --tissue Liver
 '''

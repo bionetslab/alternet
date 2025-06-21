@@ -1,6 +1,5 @@
 appris: ../data/appris_data.appris.txt
 biomart: ../data/biomart.txt
-biomart_digger_mapping: ../data/mart_export.txt
 digger: ../data/digger_data.csv
 count_data: path-to-gene-count-data
 sample_attributes: path-to-sample-attributes
@@ -8,4 +7,5 @@ transcript_data: path-to-transcript-counts
 parent_directory: /path-to-parent-directory/
 results_dir: ../SpliceAwareGRN/results/
 tf_list: ../data/allTFs_hg38.txt
+nruns: 10
 tissue: tissue_name

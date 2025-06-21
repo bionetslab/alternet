@@ -101,8 +101,34 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
     --transcript_data path-to-transcript-counts \
     --parent_directory path-to-parent-directory \
     --results_dir /data/bionets/mi34qaba/SpliceAwareGRN/results/ \
+    --nruns int
     --tissue tissue_name 
   ```
+
+### Step 2:
+
+Load Config File
+
+```python
+
+import yaml
+
+with open(path-to-config-file, 'r') as f:
+  config = yaml.safe_load(f)
+
+```
+
+### Step 3:
+
+Run inference and annotation pipeline by calling:
+
+```python
+
+    transcript_tfs, gene_tfs, targets = load_data 
+    
+    inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets)
+    
+```
 
 
 

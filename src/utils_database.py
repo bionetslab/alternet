@@ -4,7 +4,7 @@ import numpy as np
 
 
 
-def create_transcipt_annotation_database(tf_list, biomart_digger_mapping, appris_path, digger_path):
+def create_transcipt_annotation_database(tf_list, appris_path, digger_path):
     '''
     Creates an annotation database for transcription factor (TF) isoforms by integrating data from 
     APPRIS and DIGGER sources.

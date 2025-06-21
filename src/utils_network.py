@@ -1,8 +1,8 @@
 import pandas as pd 
 from collections import defaultdict
 import numpy as np
-
-
+import utils_database
+import os.path as op
 
 
 def filter_aggregate(data, threshold_importance=0.3, threshold_frequency=5, importance_column='median_importance'):
@@ -588,3 +588,34 @@ def get_isoform_category(data, transcript_id):
     '''
     result = data.loc[data['transcript_id'] == transcript_id, 'isoform_category']
     return result.iloc[0] if not result.empty else None
+
+def plausibility_filtering(config, isoform_unique, isoform_categories, tf_database):
+
+    results_dir = op.join(config['results_dir'], config['tissue'])
+    results_dir_grn = op.join(results_dir, 'grn')
+
+    as_aware_prefix = f"{config['tissue']}_as-aware.network_"
+
+
+
+    isoform_unique = isoform_unique.merge(isoform_categories.loc[:, ['transcript_id', 'isoform_category']], left_on='source', right_on='transcript_id', how='left').drop(columns=['transcript_id'])
+
+    isoform_unique_annotated = utils_database.merge_annotations_to_grn(isoform_unique, tf_database)
+
+    file = op.join(results_dir_grn, as_aware_prefix + f"annotated_w_database.tsv")
+    isoform_unique_annotated.to_csv(file, sep='\t', index=False)
+
+    file = op.join(results_dir_grn, as_aware_prefix + f"plausibility_filtered_iso_unique.tsv")
+    sort_pc.to_csv(file, sep='\t', index=False)
+
+    #filter
+    protein_coding = isoform_unique_annotated[isoform_unique_annotated['Protein Coding'] == True]
+    protein_coding = protein_coding.drop(columns=['mean_importance', 'source_transcript', 'target_gene', 'type', 'edge_key'])
+    protein_coding = protein_coding[protein_coding['isoform_category'] != 'dominant']
+    sort_pc = protein_coding.sort_values(by=['frequency', 'median_importance'], ascending=[False, False])
+
+    return sort_pc
+
+
+    
+
