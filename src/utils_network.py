@@ -1,6 +1,4 @@
 import pandas as pd 
-from collections import defaultdict
-import numpy as np
 import utils_database
 import os.path as op
 

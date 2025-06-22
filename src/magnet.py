@@ -1,9 +1,6 @@
-
 import pandas as pd
 from inference import *
 from load_data import *
-import utils_network
-import utils_database
 from total_pipeline import *
 
 def load_magnet_data(config, tf_list):

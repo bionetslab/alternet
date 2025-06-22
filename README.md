@@ -28,8 +28,9 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-Gene regulatory networks (GRNs) play a role in understanding gene interactions and their regulatory effects. They help decode biological systems by identifying how genes interact and regulate cellular processes. However, conventional GRN inference methods operate at the gene-level, overlooking transcript-level variability introduced by Alternative-Splicing.
-The goal of this pipeline is to infer gene regulatory networks that incorporate transcript-level information. This enables the discovery of regulatory mechanisms affected by alternative splicing, which are not captured in traditional gene-level analyses.
+Gene regulatory networks (GRNs) play a role in understanding gene interactions and their regulatory effects. They help decode biological systems by identifying how genes interact and regulate cellular processes. However, conventional GRN inference methods operate at the gene-level, overlooking transcript-level variability introduced by Alternative Splicing.
+
+The goal of this pipeline is to infer gene regulatory networks that incorporate transcript-level information. This enables the discovery of regulatory mechanisms affected by alternative splicing, which are not captured in traditional gene-level analyses. The inference and annotation pipeline is written in python.
 
 ## Pipeline Workflow
 
@@ -79,6 +80,7 @@ The main pipeline script executes the following steps:
 
    ```sh
    git clone https://github.com/HoffmannJuliane/SpliceAwareGRN.git
+   cd SpliceAwareGRN
    ```
 
 #### Step 2: Download Annotation files from APPRIS and DIGGER
@@ -94,7 +96,7 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
 
 ```
 
-#### Step 3: Pixi Environment 
+#### Step 3: Install Dependencies via Pixi Environment
 
 1. If not already, follow installation guide to install pixi:  https://pixi.sh/latest/installation/
 
@@ -102,7 +104,7 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
   ```
   pixi install
   ```
-3. Run in shell:
+3. Activate in shell:
   ```
   pixi shell
   ```
@@ -118,7 +120,7 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
 ### Step 1: Create Config File
   The config file saves all paths for the data needed for the transcript and annotation pipeline. A template of the config file is saved under /configs. With the script `create_config.py`you can create your own config based on the data you want to use.
 
-  To create the config run:
+  To create the config run in shell:
   ```
   python create_config.py \
     --count_data path-to-gene-counts \
@@ -130,7 +132,7 @@ wget -O data/digger_data.csv https://zenodo.org/records/3886642/files/domain_map
     --tissue tissue_name 
   ```
 
-### Step 2:
+### Step 2: In a Python Script:
 
 Load Config File
 
@@ -203,9 +205,13 @@ The file `magnet.py`conducts the annotation and inference pipeline for MAGNet da
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
+## Outline 
+![workflow](figures/pipeline.png)
+
+APPRIS Logo source: [APPRIS Github](https://avatars.githubusercontent.com/u/14290225?s=48&v=4), accessed 22/06/25. <br />
+DIGGER Logo source: [DIGGER Website](https://exbio.wzw.tum.de/digger/static/image/DIGGER.png), accessed 22/06/25. <br />
+TRIFID Logo source: [TRIFID GitHub](https://github.com/fpozoc/trifid/blob/master/img/logo.png), accessed 22/06/25.
 
 
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[product-screenshot]: images/screenshot.png
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>

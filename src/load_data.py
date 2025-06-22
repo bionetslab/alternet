@@ -1,7 +1,4 @@
-from tqdm import tqdm
 import pandas as pd
-import re
-
 
 
 def read_tf_list(tf_path, biomart):
