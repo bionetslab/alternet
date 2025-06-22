@@ -3,7 +3,6 @@ from inference import *
 from load_data import *
 import utils_database
 import utils_network
-import json
 import yaml
 import argparse
 
