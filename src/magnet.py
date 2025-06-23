@@ -4,6 +4,25 @@ from load_data import *
 from total_pipeline import *
 
 def load_magnet_data(config, tf_list):
+    '''
+    Loads MAGNet gene and transcript expression data filtered for a specific tissue and separates transcription factors from target genes.
+
+    Parameters:
+        config (dict): Configuration dictionary containing paths to data files and tissue name. Expected keys:
+            - 'transcript_data' (str): Path to transcript-level expression data.
+            - 'count_data' (str): Path to gene-level expression data.
+            - 'sample_attributes' (str): Path to sample attribute file.
+            - 'tissue' (str): Tissue name to filter samples.
+        tf_list (pd.DataFrame): DataFrame containing transcription factor information.
+
+    Returns:
+        tuple:
+            - transcript_tfs (pd.DataFrame): Transcript-level expression data for transcription factors.
+            - gene_tfs (pd.DataFrame): Gene-level expression data for transcription factors.
+            - targets (pd.DataFrame): Gene-level expression data for target genes (non-transcription factors).
+
+    
+    '''
     #transcripts already preprocessed
     transcript_data = pd.read_csv(config['transcript_data'], index_col=0)
     gene_ids = transcript_data['gene_id'].unique()

@@ -3,17 +3,15 @@ import pandas as pd
 
 def read_tf_list(tf_path, biomart):
     ''' 
-    Reads transcription factor list from file and merges it with gene information from biomart dataframe
+    Reads a transcription factor list from file and merges it with gene information from a BioMart DataFrame.
 
-    Attributes
-    ---------------
-    tf_path: string, path to tab seperated file of transcription factors
-    biomart: Dataframe
+    Parameters:
+        tf_path (str): Path to a tab-separated file containing transcription factors.
+        biomart (pd.DataFrame): DataFrame with gene and transcript information from BioMart.
 
-    Returns
-    ---------------
-    tf_list: Dataframe which containes transcription factors with their corresponding gene and trancsript information from biomart
-    '''
+    Returns:
+        pd.DataFrame: Transcription factors with corresponding gene and transcript information from BioMart.
+   '''
 
     tf_list = pd.read_csv(tf_path, sep='\t', header = None)
     tf_list.columns  = ['TF'] # rename column to TF 
@@ -34,17 +32,14 @@ class TissueNotFoundException(Exception):
 def retrieve_GTEX_tissue_sampleids(annotation_file, tissue='Liver'):
     ''' 
     Reads the annotation file to filter out samples that belong to the specified tissue.
-    If tissue is not found it raises an TissueNotFoundException
+    Raises a TissueNotFoundException if the tissue is not found.
 
-    Attributes
-    ---------------
-    annotation_file: str; path to annotation file
-    tissue: str, tissue type
+    Parameters:
+        annotation_file (str): Path to the annotation file.
+        tissue (str): Tissue type to filter for.
 
-
-    Returns
-    ---------------
-    A list of sample IDs corresponding to the selected tissue.
+    Returns:
+        list: Sample IDs corresponding to the selected tissue.
     '''
 
     print('Retrieving tissue sample IDs')
@@ -59,17 +54,15 @@ def retrieve_GTEX_tissue_sampleids(annotation_file, tissue='Liver'):
 
 def read_GTEX_transcript_expression(path, sample_ids, headers=['transcript_id', 'gene_id']):
     ''' 
-    Reads a subset of columns from the GTEX transcript expression file based on sample IDs specific to tissue type.
+    Reads a subset of columns from the GTEx transcript expression file based on sample IDs specific to a tissue type.
 
-    Attributes
-    ---------------
-    path: str; Path to the GTEX transcript expression data
-    sample_ids: List; List of sample IDs for specified tissue
-    headers: List, List of mandatory columns to read
+    Parameters:
+        path (str): Path to the GTEx transcript expression data.
+        sample_ids (list): List of sample IDs for the specified tissue.
+        headers (list): List of mandatory columns to read.
 
-    Returns
-    ---------------
-    Dataframe; containing the specified transcript or gene expression data for the given sample IDs
+    Returns:
+        pd.DataFrame: Expression data for the specified transcripts or genes and sample IDs.
     '''    
     print('Reading Transcript expression data')
     columns_to_read = headers + sample_ids 
@@ -82,18 +75,16 @@ def read_GTEX_transcript_expression(path, sample_ids, headers=['transcript_id', 
 
 def read_GTEX_gene_expression(path, sample_ids, gene_ids, headers=['Name']):
     ''' 
-    Reads a subset of columns from the GTEX transcript expression file based on sample IDs specific to tissue type.
+    Reads a subset of columns from the GTEx transcript expression file based on sample IDs specific to a tissue type.
 
-    Attributes
-    ---------------
-    path: str; Path to the GTEX transcript expression data
-    sample_ids: List; List of sample IDs for specified tissue
-    gene_ids: gene_ids used for grn
-    headers: List, List of mandatory columns to read
+    Parameters:
+        path (str): Path to the GTEx transcript expression data.
+        sample_ids (list): List of sample IDs for the specified tissue.
+        gene_ids (list): Gene IDs used for GRN inference.
+        headers (list): List of mandatory columns to read.
 
-    Returns
-    ---------------
-    Dataframe; containing the specified transcript or gene expression data for the given sample IDs
+    Returns:
+        pd.DataFrame: Expression data for the specified transcripts or genes and sample IDs.
     '''    
     print('Reading Gene expression data')
     columns_to_read = headers + sample_ids 
@@ -113,16 +104,14 @@ def read_GTEX_gene_expression(path, sample_ids, gene_ids, headers=['Name']):
 
 def remove_version_id(data, transcript_column='transcript_id'):
     ''' 
-    Removes version numbers of transcript IDs 
+    Removes version numbers from transcript IDs.
 
-    Attributes
-    ---------------
-    data: Dataframe; contains ID column
-    transcript_column: str, name of column with transcript IDs
+    Parameters:
+        data (pd.DataFrame): DataFrame containing a column with transcript IDs.
+        transcript_column (str): Name of the column containing transcript IDs.
 
-    Returns
-    ---------------
-    Dataframe; with version number removed from transcript IDs
+    Returns:
+        pd.DataFrame: DataFrame with version numbers removed from transcript IDs.
     '''   
     data[transcript_column] = data[transcript_column].str.split('.').str[0]
 
@@ -132,20 +121,18 @@ def clean_GTEX_tissue_transcript_counts(data, biomart, relevant_columns=['transc
 
                     
     ''' 
-    pipeline for removing version IDs of Transcripts and  Genes,   filtering for protein-coding genes, and removing genes with low expression
+    Pipeline for removing version numbers from transcript and gene IDs, filtering for protein-coding genes,
+    and removing genes with low expression.
 
+    Parameters:
+        data (pd.DataFrame): Transcript expression data.
+        biomart (pd.DataFrame): DataFrame containing transcript annotations from BioMart.
+        biomart_column (str): Column name in BioMart used for filtering.
+        relevant_columns (list): List of columns to clean (e.g., remove version numbers).
+        biomart_columns (list): List of columns to use for filtering.
 
-    Attributes
-    ---------------
-    data: Dataframe; transcript expression data
-    biomart: Dataframe contains transcript annotations from Biomart
-    biomart_column: Column name in biomart to use for filtering
-    relevant_columns: List, List of columns to clean
-    biomart_columns: List, List of columns to use for filtering
-
-    Returns
-    ---------------
-    Dataframe; transcript expression data, filtered for protein-coding genes with gene_id as the index
+    Returns:
+        pd.DataFrame: Filtered transcript expression data with gene_id as the index.
     '''   
 
     
@@ -168,18 +155,16 @@ def clean_GTEX_tissue_transcript_counts(data, biomart, relevant_columns=['transc
 
 def separate_tf_genes(data, tf_list, data_column='transcript_id', biomart_column='Transcript stable ID'):
     ''' 
-    Separates gene expression data for transcription factors and genes
-    
-    Attributes
-    ---------------
-    data: Dataframe; gene expression data
-    tf_list: Dataframe; contains transcription factor information
-    data_column: str, name of column in gene expression data
-    biomart_column: str, name of column in tf_list
+    Separates gene expression data into transcription factors and other genes.
 
-    Returns
-    ---------------
-    Dataframe; containing gene expression data for transcription factors
+    Parameters:
+        data (pd.DataFrame): Gene expression data.
+        tf_list (pd.DataFrame): DataFrame containing transcription factor information.
+        data_column (str): Name of the column in the gene expression data to match.
+        biomart_column (str): Name of the column in tf_list to match.
+
+    Returns:
+        pd.DataFrame: Gene expression data for transcription factors.
     '''   
     tfs = data[data[data_column].isin(tf_list[biomart_column])]
     genes = data[~data[data_column].isin(tf_list[biomart_column])]
@@ -191,32 +176,29 @@ def separate_tf_genes(data, tf_list, data_column='transcript_id', biomart_column
 
 def get_target_genes(data):
     ''' 
-    Gets target genes from gene expression data
+    Gets target genes from gene expression data.
 
-    Attributes
-    ---------------
-    data: Dataframe; gene expression data
+    Parameters:
+        data (pd.DataFrame): Gene expression data.
 
-    Returns
-    ---------------
-    List; containing gene IDs
+    Returns:
+        list: List containing gene IDs.
     '''   
     return data.index.tolist()
 
 
 def load_data(config, biomart, tf_list):
     '''
-    Loads gene expression data and transcription factor list
-    
-    Attributes
-    --------------- 
-    config: dict; configuration dictionary containing paths to data files
+    Loads gene expression data and transcription factor list.
 
-    Returns
-    ---------------
-    transcript_tfs: Dataframe; containing transcription factor transcript expression data of tfs
-    gene_tfs: Dataframe; containing transcription factor gene expression data of tfs
-    targets: Dataframe; containing gene expression data of genes that are not tfs
+    Parameters:
+        config (dict): Configuration dictionary containing paths to data files.
+
+    Returns:
+    
+        - transcript_tfs (pd.DataFrame): Transcription factor transcript expression data.
+        - gene_tfs (pd.DataFrame): Transcription factor gene expression data.
+        - targets (pd.DataFrame): Gene expression data of genes that are not transcription factors.
 
     '''
 
@@ -247,19 +229,20 @@ def load_data(config, biomart, tf_list):
 
 def prepare_for_inference(transcript_tfs, gene_tfs, targets, transcript_column='transcript_id', gene_column='gene_id'):
     '''
-    Prepares gene expression data for inference by separating it into canonical and as-aware gene expression data
-    
-    Attributes
-    ---------------
-    tfs: Dataframe; contains transcription factor gene expression data
-    genes: Dataframe; contains gene expression data
+    Prepares gene expression data for inference by separating it into canonical and AS-aware gene expression data.
 
+    Parameters:
+        transcript_tfs (pd.DataFrame): Transcription factor isoform expression data
+        gene_tfs (pd.DataFrame): Transcription factor gene expression data.
+        targets (pd.DataFrame): Gene expression data of non-tf gene expression data.
+        transcript_column (str): column header of transcript ID column
+        gene_column (str): column header of gene ID column
 
-    Returns
-    ---------------
-    data_canonical: Dataframe; containing canonical gene expression data    
-    data_asaware: Dataframe; containing as-aware gene expression data
-    target_gene_list: List; containing target gene IDs
+    Returns:
+        tuple:
+            - data_canonical (pd.DataFrame): Canonical gene expression data.
+            - data_asaware (pd.DataFrame): AS-aware gene expression data.
+            - target_gene_list (list): List of target gene IDs.
     
     '''
 

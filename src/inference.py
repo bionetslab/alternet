@@ -10,22 +10,20 @@ from load_data import *
 from aggregate_grnboost import *
 
 
-def compute_and_save_network(gene_data, target_names, tf_list, client, file, use_tf=False, aggregate=True):
+def compute_and_save_network(gene_data, target_names, tf_list, client, file, use_tf=True):
     
     ''' 
-    computes GRN using GRNBoost2 
-    
-    Attributes
-    ---------------
-    data: Dataframe; expression data 
-    tf_list: List, List of transcription factors to be included
-    client: Dask client; used to distribute computation across a cluster
-    file: str, output file path where GRN will be saved
-    use_tf: boolean flag; if true, list of transcription factors is used during network computation. If False, all genes are used.
+    Computes a gene regulatory network (GRN) using GRNBoost2.
 
-    Returns
-    ---------------
-    The function returns the computed network, a DataFrame that contains the regulatory interactions between genes and/or transcription factors.
+    Parameters:
+        data (pd.DataFrame): Expression data.
+        tf_list (list): List of transcription factors to include.
+        client (dask.distributed.Client): Dask client used to distribute computation across a cluster.
+        file (str): Output file path where the GRN will be saved.
+        use_tf (bool): If True, the transcription factor list is used during network computation. If False, all genes are used.
+
+    Returns:
+        pd.DataFrame: Computed network containing regulatory interactions between genes and/or transcription factors.
     '''   
     
     print('Computing network')
@@ -55,18 +53,21 @@ def aggregate_and_save(results_dir_grn, prefix, nruns, type='as-aware_'):
 
 
 def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_list, aggregate=True):
-    """
-    Perform inference to create gene regulatory networks (GRNs) for transcript data and gene data.
-    Optionally, it can aggregate the results from multiple runs.
+    '''
+    Performs inference to create gene regulatory networks (GRNs) for transcript-level and gene-level data.
+    Optionally aggregates the results from multiple runs.
 
-    Attributes:
-    config (dict): Configuration dictionary containing paths and settings for the inference process.
-    nruns (int): Number of runs to perform for the inference.
-    aggregate (bool): Whether to aggregate the results from multiple runs. Default is True.
-    
+    Parameters:
+        config (dict): Configuration dictionary containing paths and settings for the inference process.
+        nruns (int): Number of inference runs to perform.
+        aggregate (bool): Whether to aggregate results from multiple runs. Default is True.
+
     Returns:
-    None
-    """
+        tuple:
+            - as_aware_grn (pd.DataFrame): Inferred or aggregated AS-aware GRN.
+            - canonical_grn (pd.DataFrame): Inferred or aggregated canonical GRN.
+    
+    '''
 
 
 

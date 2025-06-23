@@ -7,8 +7,8 @@ import magnet
 
 
 def load_network(config): 
-    """
-    Loads aggregeated isoform-level and gene-level GRNs.
+    '''
+    Loads aggregated isoform-level and gene-level GRNs.
 
     Parameters:
         config (dict): Configuration dictionary containing:
@@ -19,7 +19,8 @@ def load_network(config):
         tuple:
             - as_aware_grn (pd.DataFrame): Aggregated AS-aware GRN.
             - canonical_grn (pd.DataFrame): Aggregated canonical GRN.
-    """
+    '''
+
     # important paths, prefixes, files:
     results_dir = op.join(config['results_dir'], config['tissue'])
     results_dir_grn = op.join(results_dir, 'grn')
@@ -36,7 +37,7 @@ def load_network(config):
     return as_aware_grn, canonical_grn
 
 def load_plausibility_filtered(config):
-    """
+    '''
     Loads the plausibility-filtered isoform-unique gene regulatory network (GRN).
 
     Parameters:
@@ -46,7 +47,7 @@ def load_plausibility_filtered(config):
 
     Returns:
         pd.DataFrame: DataFrame containing plausibility-filtered isoform-unique GRN edges.
-    """
+    '''
     results_dir = op.join(config['results_dir'], config['tissue'])
     results_dir_grn = op.join(results_dir, 'grn')
 

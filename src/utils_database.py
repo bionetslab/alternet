@@ -16,10 +16,10 @@ def create_transcipt_annotation_database(tf_list, appris_path, digger_path):
             including a 'Transcript stable ID' column. May include an 'index' column that will be dropped.
 
         appris_path : str
-            Path to a tab-separated file containing APPRIS annotations for transcripts.
+            Path to file containing APPRIS annotations for transcripts.
 
         digger_path : str
-            Path to a CSV file containing DIGGER annotations including domain mappings to transcripts.
+            Path to file containing DIGGER annotations including domain mappings to transcripts.
 
     Returns
    
@@ -52,12 +52,12 @@ def create_transcipt_annotation_database(tf_list, appris_path, digger_path):
 
 def get_unique_items(transcript_items, related_df, column_name):
     '''
-    Find items that are present only in the transcript and not in related isoforms.
+    Find items that are present only in specific transcript and not in related isoforms.
 
     Parameters:
 
-        transcript_items : list
-            List of items from the transcript (e.g., exon IDs, Pfam IDs).
+        transcript_items : List
+            List of characteristics from the transcript (e.g., exon IDs, Pfam IDs).
 
         related_df : pd.DataFrame
             DataFrame of related transcripts.
@@ -126,12 +126,12 @@ def check_annotations(transcript_id, annotation_database):
             Ensembl ID of the transcript.
 
         annotation_database : pd.DataFrame
-            DataFrame containing APPRIS, DIGGER, and Ensembl annotation data.
+            DataFrame containing APPRIS, and DIGGER annotation data.
 
     Returns:
     
         dict
-            A dictionary containing all annotations of the transcript, including unique exon and Pfam IDs.
+            A dictionary containing all annotations of the transcript, including unique exon IDs and Pfam IDs.
   
     '''
 
@@ -232,7 +232,7 @@ def merge_annotations_to_grn(grn, annotation_database):
             DataFrame representing the gene regulatory network, containing a 'source' column with transcript IDs.
 
         annotation_database : pd.DataFrame
-            DataFrame containing APPRIS, DIGGER, and Ensembl annotation data.
+            DataFrame containing APPRIS, and DIGGER annotation data.
 
     Returns:
     

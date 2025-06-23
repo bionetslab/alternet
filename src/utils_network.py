@@ -181,11 +181,11 @@ def get_common_edges(gene_grn, transcript_grn, path=None, save=False):
 
         Parameters:
 
-            gene : pd.DataFrame  
-                Gene regulatory network containing only gene nodes.
+            gene_grn : pd.DataFrame  
+                gene-level regulatory network containing only gene nodes.
 
-            transcript : pd.DataFrame  
-                Transcript regulatory network containing genes and transcripts, with transcripts as transcription factors (TFs).
+            transcript_grn : pd.DataFrame  
+                isoform-level regulatory network containing genes and transcripts, with transcripts as transcription factors (TFs).
 
             path : str  
                 File path to save the overlapping network.
@@ -222,23 +222,23 @@ def get_diff(gene_grn, transcript_grn, path=None, save=False):
 
     Parameters:
 
-        gene : pd.DataFrame  
-            Gene regulatory network containing only gene nodes.
+        gene_grn : pd.DataFrame  
+            gene-level regulatory network containing only gene nodes.
 
         transcript : pd.DataFrame  
-            Transcript regulatory network containing genes and transcripts, with transcripts as transcription factors (TFs).
+            isoform-level regulatory network containing genes and transcripts, with transcripts as transcription factors (TFs).
 
         path : str  
             Path to save the resulting networks.
 
         save : bool  
-            Flag indicating whether to save the resulting networks to disk.
+            Flag indicating whether to save the resulting networks.
 
     Returns:
 
         tuple of pd.DataFrame  
-            - DataFrame with edges found only in the canonical (gene) network.
-            - DataFrame with edges found only in the AS-aware (transcript) network.
+            - DataFrame with edges found only in the canonical (gene-level) network.
+            - DataFrame with edges found only in the AS-aware (isoform-level) network.
     '''
     # Convert edge_keys to sets for faster difference operation
     gene_edges = set(gene_grn['edge_key'])
@@ -504,7 +504,7 @@ def find_transcript(transcript_id, AS, common):
 
         dict  
             Dictionary indicating the presence of the transcript in each DataFrame, 
-            e.g., {'AS': True/False, 'common': True/False}.
+            {'AS': True/False, 'common': True/False}.
     '''
 
     presence = {
@@ -536,7 +536,7 @@ def find_gene(gene_id, AS, CAN, common, source_column = 'TF'):
 
         dict  
             Dictionary indicating the presence of the gene in each DataFrame, 
-            e.g., {'AS': True/False, 'CAN': True/False, 'common': True/False}.
+            {'AS': True/False, 'CAN': True/False, 'common': True/False}.
     '''
 
     presence = {

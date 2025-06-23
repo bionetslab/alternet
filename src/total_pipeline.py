@@ -10,7 +10,7 @@ import argparse
 
 def inference_and_annotation_pipeline(config, transcript_tfs, gene_tfs, targets):
     '''
-    Executes the full pipeline for GRN inference and annotation with alternative splicing awareness.
+    Executes the full GRN inference and annotation pipeline.
 
     This function performs the following steps:
     1. Loads required resources including biomart annotations and transcription factor list.
