@@ -1,5 +1,5 @@
 [workspace]
-authors = ["Juliane Hoffmann <juliane.hoffmann@fau.de>", "Anne Hartebrodt" <anne.hartebrodt@fau.de>]
+authors = ["Juliane Hoffmann <juliane.hoffmann@fau.de>", "Anne Hartebrodt <anne.hartebrodt@fau.de"]
 channels = ["conda-forge"]
 name = "alternet"
 platforms = ["linux-64"]
