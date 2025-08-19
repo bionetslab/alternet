@@ -1,5 +1,5 @@
 [workspace]
-authors = ["Juliane Hoffmann <juliane.hoffmann@fau.de>", "Anne Hartebrodt <anne.hartebrodt@fau.de"]
+authors = ["Juliane Hoffmann <juliane.hoffmann@fau.de>", "Anne Hartebrodt <anne.hartebrodt@fau.de>"]
 channels = ["conda-forge"]
 name = "alternet"
 platforms = ["linux-64"]
@@ -9,12 +9,12 @@ preview = ["pixi-build"]
 [tasks]
 install-kernel = "python -m ipykernel install --user --name pixi_alternet --display-name pixi_alternet"
 
-
 [dependencies]
 python = "3.11.8.*"
 pip = ">=25.1.1,<26"
 ipykernel = ">=6.29.5,<7"
 plotly = ">=6.1.2,<7"
+requests = ">=2.0"
 
 [pypi-dependencies]
 lda = "==3.0.0"
@@ -28,23 +28,17 @@ networkx = "==3.2.1"
 igraph = "==0.11.8"
 gseapy = "==0.10.8"
 
-
-### Specify the package properties ###
-
-
-[package]
-name = "alternet"
-version = "0.1.0"
-
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
-
-[package.host-dependencies]
-hatchling = "*"
-
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project]
+name = "alternet"
+version = "0.1.0"
+description = "A Python package for efficient approximate GRN FDR control."
+readme = "README.md"
+license = {text = "GNU GPL v3.0"}
+authors = [
+  { name = "Juliane Hoffmann", email = "juliane.hoffmann@fau.de" },
+  { name = "Anne Hartebrodt", email = "anne.hartebrodt@fau.de" },
+]
