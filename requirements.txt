@@ -1,0 +1,14 @@
+pip
+ipykernel
+plotly
+requests
+lda
+numpy
+scipy
+pandas
+scanpy
+matplotlib
+arboreto
+networkx
+igraph
+gseapy
