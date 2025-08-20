@@ -4,7 +4,7 @@ from pathlib import Path
 import os.path as op
 
 def main():
-    parser = argparse.ArgumentParser(description="Create a YAML config file for SpliceAwareGRN.")
+    parser = argparse.ArgumentParser(description="Create a YAML config file for alternet.")
 
     parser.add_argument('--count_data', required=True, help='Path to GTEx gene TPM file')
     parser.add_argument('--sample_attributes', required=True, help='Path to GTEx sample attributes')

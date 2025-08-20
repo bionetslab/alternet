@@ -1,5 +1,5 @@
 import pandas as pd 
-import utils_database
+import db as db
 import os.path as op
 
 
@@ -596,7 +596,7 @@ def plausibility_filtering(config, isoform_unique, isoform_categories, tf_databa
 
     isoform_unique = isoform_unique.merge(isoform_categories.loc[:, ['transcript_id', 'isoform_category']], left_on='source', right_on='transcript_id', how='left').drop(columns=['transcript_id'])
 
-    isoform_unique_annotated = utils_database.merge_annotations_to_grn(isoform_unique, tf_database)
+    isoform_unique_annotated = db.merge_annotations_to_grn(isoform_unique, tf_database)
 
     file = op.join(results_dir_grn, as_aware_prefix + f"annotated_w_database.tsv")
     isoform_unique_annotated.to_csv(file, sep='\t', index=False)

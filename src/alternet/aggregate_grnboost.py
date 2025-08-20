@@ -58,24 +58,4 @@ def aggregate_results(grn_results):
 
     return aggregated_df
 
-def main():
-    parser = argparse.ArgumentParser(description="Process a file from the command line.")
-    # Add the file argument
-    parser.add_argument('-f', type=str, help='The file to process')
-    parser.add_argument('-p', type=str, help='Prefix of the files')
-    parser.add_argument('-n', type=int, help='Number of runs of grnboost')
-    args = parser.parse_args()
-    # Read GRNBoost files
-    print("Reading files ...")
-    grn_results = read_grn_files(args.f, args.p, args.n)
-    # Aggregate results
-    print("Aggregating results ...")
-    aggregated_df = aggregate_results(grn_results)
-    # Save aggregated results
-    print("Saving results ...")
-    aggregated_df.to_csv(op.join(args.f, args.p + 'aggregated.tsv'), sep='\t', index=False)
-    print('Saved results in ', op.join(args.f, args.p + 'aggregated.tsv'))
-    print("Done!")
-if __name__ == "__main__":
-    main()
     

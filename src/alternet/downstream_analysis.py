@@ -3,7 +3,7 @@ from inference import *
 from load_data import *
 import os
 import gseapy as gp
-import magnet 
+import alternet.src.alternet.runners.magnet as magnet 
 
 
 def load_network(config): 
@@ -35,6 +35,7 @@ def load_network(config):
     canonical_grn = pd.read_csv(canonical_aggregated, sep='\t')
 
     return as_aware_grn, canonical_grn
+
 
 def load_plausibility_filtered(config):
     '''
@@ -107,28 +108,4 @@ def do_gsea(config, targets):
 
     return enr
 
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Process a file from the command line.")
-    
-    # Add the file argument
-    parser.add_argument('-f', type=str, help='Config File')
-  
-    # load config file
-    args = parser.parse_args()
-    with open(args.f, 'r') as f:
-        config = yaml.safe_load(f)
-
-    biomart = pd.read_csv(config['biomart'], sep='\t')
-    tf_list = read_tf_list(config['tf_list'], biomart)
-
-    print('Load data')
-    transcript_tfs, gene_tfs, targets = magnet.load_magnet_data(config, tf_list)
-    #transcript_tfs, gene_tfs, targets = load_data(config, biomart, tf_list)
-
-    do_gsea(config, targets)
-    
-if __name__ == "__main__":
-    main()
     

@@ -131,29 +131,3 @@ def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_l
     
     return grn1, grn2
 
-if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser(description="Process a file from the command line.")
-    
-    # Add the file argument
-    parser.add_argument('-f', type=str, help='The file to process')
-    parser.add_argument('-n', type=int, help='Number of runs of grnboost')
-
-    # Parse the arguments
-    args = parser.parse_args()
-    with open(args.f, 'r') as f:
-        config = yaml.safe_load(f)
-
-    
-    print('Load data and prepare for inference')
-    
-    # important files to load
-    biomart = pd.read_csv(config['biomart'], sep='\t')
-    tf_list = read_tf_list(config['tf_list'], biomart)
-    
-    
-    transcript_tfs, gene_tfs, targets = load_data(config, biomart, tf_list)
-    data_canonical, data_asware, target_gene_list = prepare_for_inference(transcript_tfs, gene_tfs, targets)
-
-
-    inference(config, args.n, data_canonical=data_canonical, data_asware=data_asware, target_gene_list=target_gene_list, tf_list=tf_list)

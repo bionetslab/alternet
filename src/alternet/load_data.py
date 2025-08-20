@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def read_tf_list(tf_path, biomart):
+def map_tf_ids(tf_list, biomart):
     ''' 
     Reads a transcription factor list from file and merges it with gene information from a BioMart DataFrame.
 
@@ -12,8 +12,6 @@ def read_tf_list(tf_path, biomart):
     Returns:
         pd.DataFrame: Transcription factors with corresponding gene and transcript information from BioMart.
    '''
-
-    tf_list = pd.read_csv(tf_path, sep='\t', header = None)
     tf_list.columns  = ['TF'] # rename column to TF 
     tf_list = tf_list.merge(biomart, left_on = 'TF', right_on = 'Gene name') # merge tf list with biomart: join 'TF' with 'Gene name'
     tf_list = tf_list.loc[:, ['TF', 'Gene stable ID', 'Transcript stable ID']].drop_duplicates() #remove individual versions
