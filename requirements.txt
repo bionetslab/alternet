@@ -12,3 +12,4 @@ arboreto
 networkx
 igraph
 gseapy
+tqdm
