@@ -4,13 +4,12 @@ import os.path as op
 import os
 from distributed import Client, LocalCluster
 from arboreto_added.algo import grnboost2
-import yaml
-import argparse
-from load_data import *
-from aggregate_grnboost import *
+from data_preprocessing import *
+from collections import defaultdict
+from tqdm import tqdm 
 
 
-def compute_and_save_network(gene_data, target_names, tf_list, client, file, use_tf=True):
+def compute_grn(gene_data, target_names, tf_list, client, use_tf=True):
     
     ''' 
     Computes a gene regulatory network (GRN) using GRNBoost2.
@@ -40,16 +39,8 @@ def compute_and_save_network(gene_data, target_names, tf_list, client, file, use
 
     # write the GRN to file
     network.columns = ['source', 'target', 'importance']
-    network.to_csv(file, sep='\t', index=False, header=True)
-    
     return network
-    
 
-def aggregate_and_save(results_dir_grn, prefix, nruns, type='as-aware_'):
-    grn = read_grn_files(results_dir_grn, prefix, nruns)
-    aggregate_df = aggregate_results(grn)
-    aggregate_df.to_csv(op.join(results_dir_grn, prefix + 'aggregated.tsv'), sep='\t', index=False)
-    return aggregate_df
 
 
 def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_list, aggregate=True):
@@ -69,10 +60,7 @@ def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_l
     
     '''
 
-
-
     print('Starting inference ...')
-
 
     client = Client(LocalCluster())
 
@@ -83,51 +71,79 @@ def inference(config, nruns, data_canonical, data_asware, target_gene_list, tf_l
     results_dir_grn = op.join(results_dir, 'grn')
     os.makedirs(results_dir_grn, exist_ok=True)
 
-    as_aware_prefix = f"{config['tissue']}_as-aware.network_"
-    canonical_prefix = f"{config['tissue']}_canonical.network_"
-
     data_asaware_t = data_asware.T
     data_canonical_t = data_canonical.T
 
     tfs_transcripts = tf_list['Transcript stable ID'].unique().tolist()
     tfs_genes = tf_list['Gene stable ID'].unique().tolist()
     
+    as_aware_grns = []
     for i in range(1, nruns+1):
-        print(i)
-        print()
-        file = op.join(results_dir_grn, as_aware_prefix + f"{i}.tsv")
-        grn1 = compute_and_save_network(data_asaware_t,
+        grn1 = compute_grn(data_asaware_t,
                                     target_gene_list,
                                     tfs_transcripts,
                                     client,
-                                    file,
                                     use_tf=True)
-        
+        as_aware_grns.append(grn1)
 
+    canoncial_grns = []
     for i in range(1, nruns+1):
-        print(i)
-        print()
-        file = op.join(results_dir_grn, canonical_prefix + f"{i}.tsv")
-        grn2 = compute_and_save_network(data_canonical_t,
+        grn2 = compute_grn(data_canonical_t,
                                     target_gene_list,
                                     tfs_genes,
                                     client,
-                                    file,
                                     use_tf=True)
+        canoncial_grns.append(grn2)
         
     
     client.close()
     print('Inference complete')
-    print('Results saved to:', results_dir_grn)
 
 
     if aggregate:
         print('Aggregate results')
 
-        as_aware = aggregate_and_save(results_dir_grn, as_aware_prefix, nruns, type='as-aware_')
-        canoncial = aggregate_and_save(results_dir_grn, canonical_prefix, nruns, type='canonical_')
-        print('Aggregated results saved to:', results_dir_grn)
+        as_aware = aggregate_results(as_aware_grns)
+        canoncial = aggregate_results(canoncial_grns)
         return as_aware, canoncial
     
-    return grn1, grn2
+    return as_aware_grns, canoncial_grns
 
+
+
+
+def aggregate_results(grn_results):
+    '''
+    Aggregates results from multiple GRN inference runs.
+
+    Parameters:
+        grn_results (list of pd.DataFrame): Results from multiple GRNBoost runs.
+
+    Returns:
+        pd.DataFrame: Aggregated consensus network.
+    '''
+    # Create a dictionary to store the aggregated results
+    edge_data = defaultdict(list)
+
+    print("Going through edges of each df ...")
+    for df in grn_results:
+        for _, row in tqdm(df.iterrows(), total=df.shape[0]):
+            edge = (row['source'], row['target'])
+            edge_data[edge].append(row['importance'])
+
+    aggregated_edges = []
+    for (source, target), weights in tqdm(edge_data.items(), total=len(edge_data)):
+        aggregated_edges.append(
+            {
+                'source': source,
+                'target': target,
+                'frequency': len(weights),
+                'mean_importance' : sum(weights) / len(weights),
+                "median_importance": sorted(weights)[len(weights) // 2]
+            }
+        )
+    aggregated_df = pd.DataFrame(aggregated_edges)
+
+    return aggregated_df
+
+    

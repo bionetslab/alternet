@@ -3,7 +3,7 @@ import db as db
 import os.path as op
 
 
-def filter_aggregate(data, threshold_importance=0.3, threshold_frequency=5, importance_column='median_importance'):
+def filter_aggregated(data, threshold_importance=0.3, threshold_frequency=5, importance_column='median_importance'):
     '''
     Filter out the top `threshold_importance` percent of data based on the importance column 
     and retain only edges that appear at least `threshold_frequency` times.
@@ -36,41 +36,7 @@ def filter_aggregate(data, threshold_importance=0.3, threshold_frequency=5, impo
     
     return data.loc[freq_mask & (data[importance_column] >= importance_threshold)]
 
-def filter_aggregated_networks(asaware_grn, canonical_grn, threshold_frequency=5, threshold_importance=0.3, importance_column='median_importance'):
-    '''
-    Filter out the top `threshold_importance` percent of data based on the importance column 
-    and retain only edges that appear at least `threshold_frequency` times in both AS-aware 
-    and canonical GRNs.
 
-    Parameters:
-
-        asaware_grn : pd.DataFrame
-            DataFrame containing edges from the alternative splicing-aware GRN inference, 
-            including importance and frequency values.
-
-        canonical : pd.DataFrame
-            DataFrame containing edges from the canonical GRN inference, including 
-            importance and frequency values.
-
-        threshold_importance : float
-            Percentage (between 0 and 1) of top entries to retain based on the importance column.
-
-        threshold_frequency : int
-            Minimum number of times an edge must appear in the GRN inference to be retained.
-
-        importance_column : str
-            Name of the column containing importance values.
-
-    Returns:
-
-        tuple
-            A tuple containing the filtered AS-aware and canonical GRN DataFrames.
-    '''
-
-    asaware_grn = filter_aggregate(asaware_grn, threshold_importance, threshold_frequency, importance_column)
-    canonical_grn = filter_aggregate(canonical_grn, threshold_importance, threshold_frequency, importance_column)
-    
-    return asaware_grn, canonical_grn
 
 
 def biomart_mapping(net, biomart, source_column='TF', target_column='target', as_aware=True):
@@ -111,8 +77,9 @@ def biomart_mapping(net, biomart, source_column='TF', target_column='target', as
 
 
     # Map source gene -> names
+    biomart_source_gene = biomart[["Gene stable ID", "Gene name"]]
     sg_sub = net[is_source_gene]
-    sg_sub = sg_sub.merge(biomart_source.drop_duplicates("Gene stable ID"), left_on=source_column, right_on="Gene stable ID", how="left")
+    sg_sub = sg_sub.merge(biomart_source_gene.drop_duplicates("Gene stable ID"), left_on=source_column, right_on="Gene stable ID", how="left")
 
     # For sg_sub where target is gene
     sg_sub = sg_sub.merge(biomart_target, left_on=target_column, right_on="Gene stable ID", how="left", suffixes=('_source', '_target'))
@@ -175,7 +142,8 @@ def add_edge_key(df, biomart, key='edge_key', type='AS', source_column='TF', tar
 
 
 
-def get_common_edges(gene_grn, transcript_grn, path=None, save=False):
+
+def get_common_edges(gene_grn, transcript_grn):
     ''' 
     Compute the overlapping network between a gene regulatory network and a transcript regulatory network.
 
@@ -209,13 +177,10 @@ def get_common_edges(gene_grn, transcript_grn, path=None, save=False):
     # Merge results
     overlap = pd.concat([overlap_gene_in_t, overlap_gene_g], ignore_index=True)
 
-    if save and path:
-        overlap.to_csv(path, sep='\t', index=False)
-
     return overlap
 
 
-def get_diff(gene_grn, transcript_grn, path=None, save=False):
+def get_diff(gene_grn, transcript_grn):
     ''' 
     Compute two networks containing edges found exclusively in either the gene regulatory network 
     or the transcript regulatory network based on the edge key.
@@ -251,11 +216,6 @@ def get_diff(gene_grn, transcript_grn, path=None, save=False):
     # Filter rows based on the set differences
     diff_gene = gene_grn[gene_grn['edge_key'].isin(diff_gene_edges)]
     diff_transcript = transcript_grn[transcript_grn['edge_key'].isin(diff_transcript_edges)]
-
-    # Save if required
-    if save and path:
-        diff_transcript.to_csv(f"{path}transcript_level_only.tsv", sep='\t', index=False, header=True)
-        diff_gene.to_csv(f"{path}gene_level_only.tsv", sep='\t', index=False, header=True)
 
     return diff_gene, diff_transcript
 
@@ -422,6 +382,7 @@ def isoform_categorization(transcript_tfs, gene_tfs, threshold_dominance=90, thr
     expression_columns = gene_tfs.columns[1:]
     df = gene_tfs.copy(deep=True)
     df['sum_gene_expression'] = df[expression_columns].sum(axis=1)
+    print(df)
 
     gene_expression = df.copy(deep=True).loc[:,['gene_id', 'sum_gene_expression']]
     
@@ -483,109 +444,7 @@ def get_gene_cases(df):
     gene_cases.rename(columns={'isoform_category' : 'gene_case'}, inplace=True)
 
     return gene_cases
-
-
-def find_transcript(transcript_id, AS, common):
-    '''
-    Check in which of the given DataFrames the specified transcript is present.
-
-    Parameters:
-
-        transcript_id : str  
-            The transcript ID to search for.
-
-        AS : pd.DataFrame  
-            DataFrame representing the AS-aware network.
-
-        common : pd.DataFrame  
-            DataFrame representing the common network.
-
-    Returns:
-
-        dict  
-            Dictionary indicating the presence of the transcript in each DataFrame, 
-            {'AS': True/False, 'common': True/False}.
-    '''
-
-    presence = {
-        'AS': transcript_id in AS['source'].values,
-        'common': transcript_id in common['source'].values
-    }
-
-    return presence
     
-def find_gene(gene_id, AS, CAN, common, source_column = 'TF'):
-    '''
-    Check in which of the given DataFrames the specified gene is present.
-
-    Parameters:
-
-        gene_id : str  
-            The gene ID to search for.
-
-        AS : pd.DataFrame  
-            DataFrame representing the AS-aware network.
-
-        CAN : pd.DataFrame  
-            DataFrame representing the canonical network.
-
-        common : pd.DataFrame  
-            DataFrame representing the common network.
-
-    Returns:
-
-        dict  
-            Dictionary indicating the presence of the gene in each DataFrame, 
-            {'AS': True/False, 'CAN': True/False, 'common': True/False}.
-    '''
-
-    presence = {
-        'AS': gene_id in AS['source_gene'].values,
-        'CAN' : gene_id in CAN[source_column].values,
-        'common': gene_id in common[source_column].values
-    }
-
-    return presence
-    
-def get_isoforms(gene_id, gene_iso_mapping):
-    '''
-    Return all isoforms mapped to a given gene.
-
-    Parameters:
-
-        gene_id : str  
-            Ensembl Gene ID.
-
-        gene_iso_mapping : pd.DataFrame  
-            DataFrame containing gene-to-isoform mappings.
-
-    Returns:
-
-        list  
-            List of all isoforms mapped to the specified gene.
-    '''
-    isoforms = gene_iso_mapping[gene_id]['isoforms']
-    return isoforms
-
-def get_isoform_category(data, transcript_id):
-    '''
-    Retrieve the isoform category for a given transcript ID.
-
-    Parameters:
-
-        data : pd.DataFrame  
-            DataFrame containing transcript-related information.
-
-        transcript_id : str  
-            Transcript ID to search for.
-
-    Returns:
-
-        str or None  
-            The isoform category if found; otherwise, None.
-    '''
-    result = data.loc[data['transcript_id'] == transcript_id, 'isoform_category']
-    return result.iloc[0] if not result.empty else None
 
 def plausibility_filtering(config, isoform_unique, isoform_categories, tf_database):
 
