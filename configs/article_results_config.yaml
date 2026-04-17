@@ -1,0 +1,39 @@
+# AlterNet 2.0 article results configuration
+data_dir: "./data/"
+results_dir: "./results/"
+
+# Reference files (relative to data_dir)
+biomart: "biomart.txt"
+appris: "appris_data.appris.txt"
+digger: "digger_data.csv"
+tf_list: "allTFs_hg38.txt"
+sf_list: "comprehensive_sfs.csv"
+
+# Datasets
+magnet_conditions:
+  - NF
+  - DCM
+  - HCM
+
+gtex_tissues:
+  - "Heart - Left Ventricle"
+  - "Liver"
+  - "Kidney - Cortex"
+  - "Bladder"
+  - "Pancreas"
+  - "Spleen"
+  - "Stomach"
+
+# MAGNet data paths (relative to data_dir)
+magnet_tpm_pattern: "{condition}_magnet_prefiltered_tpm.tsv"
+
+# GTEx data paths
+gtex_tpm: "GTEx_Analysis_v10_RSEMv1.3.3_transcripts_tpm.txt"
+gtex_sample_attributes: "GTEx_Analysis_v10_Annotations_SampleAttributesDS.txt"
+
+# Pipeline parameters
+n_runs: 10
+variance_percentile: 0.7
+min_frequency: 10
+importance_percentile: 0.7
+top_k: 500

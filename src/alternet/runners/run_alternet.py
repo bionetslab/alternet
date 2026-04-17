@@ -1,5 +1,4 @@
 import sys
-sys.path.append('/data/bionets/og86asub/alternet-project/alternet/')
 import pandas as pd
 import alternet.data_preprocessing as preprocessing
 from alternet.annotation import map_tf_ids
