@@ -19,8 +19,8 @@ def test_compile_pat_short_word():
     pat = compile_pat(["rna", "mrna"])
     assert pat.search("rna processing") is not None
     assert pat.search("mrna splicing") is not None
-    # Short word should use word boundaries
-    assert pat.search("crna") is None or pat.pattern.startswith("|") or True
+    # Short words use word boundaries - "crna" should not match "rna" boundary pattern
+    assert pat.search("crna") is None
 
 
 def test_compile_pat_long_word():
