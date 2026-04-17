@@ -73,10 +73,6 @@ graphviz = "*"
 # but it currently only contains the local editable install.
 alternet = { path = ".", editable = true }
 
-[tool.pixi.environments]
-kernel = ["kernel"]
-
-
 # --- KERNEL ENVIRONMENT  ---
 [tool.pixi.feature.kernel.dependencies]
 python = "*"
@@ -100,3 +96,28 @@ alternet = { path = ".", editable = true }
 [tool.pixi.feature.kernel.tasks]
 install-kernel = "python -m ipykernel install --user --name pixi_alternet --display-name pixi_alternet"
 uninstall-kernel = "jupyter kernelspec uninstall pixi_alternet"
+
+# --- DEFAULT TASKS ---
+[tool.pixi.tasks]
+pytest = "pytest tests/ -v"
+reproduce-article-results = "python -m alternet.runners.run_pipeline_v2 --config configs/article_results_config.yaml --mode full"
+reproduce-article-results-downstream = "python -m alternet.runners.run_pipeline_v2 --config configs/article_results_config.yaml --mode downstream"
+
+# --- DOCS ENVIRONMENT ---
+[tool.pixi.feature.docs.dependencies]
+python = "*"
+sphinx = "*"
+
+[tool.pixi.feature.docs.pypi-dependencies]
+alternet = { path = ".", editable = true }
+furo = "*"
+sphinx-autodoc-typehints = "*"
+nbsphinx = "*"
+pandoc = "*"
+
+[tool.pixi.feature.docs.tasks]
+build-docs = "sphinx-build -b html docs/ docs/_build/html"
+
+[tool.pixi.environments]
+kernel = ["kernel"]
+docs = ["docs"]
