@@ -21,6 +21,7 @@ def map_tf_ids(tf_list, biomart):
     tf_list = tf_list.loc[:, ['TF', GENE_STABLE_ID, TRANSCRIPT_STABLE_ID]].drop_duplicates() #remove individual versions
     return tf_list
 
+
 def map_sf_ids(sf_list_raw: pd.DataFrame, biomart: pd.DataFrame) -> pd.DataFrame:
     """Map SF gene names to Ensembl gene and transcript IDs.
 
@@ -73,6 +74,7 @@ def combine_tf_sf_lists(
     ] = "TF_SF"
     combined = combined.drop_duplicates(subset=["Transcript stable ID"], keep="first")
     return combined
+
 
 
 def create_transcript_mapping(biomart):
