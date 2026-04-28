@@ -2,8 +2,8 @@ import pandas as pd
 from collections import defaultdict
 import numpy as np
 
-
-
+GENE_STABLE_ID = 'Gene stable ID'
+TRANSCRIPT_STABLE_ID = 'Transcript stable ID'
 
 def map_tf_ids(tf_list, biomart):
     ''' 
@@ -18,8 +18,61 @@ def map_tf_ids(tf_list, biomart):
    '''
     tf_list.columns  = ['TF'] # rename column to TF 
     tf_list = tf_list.merge(biomart, left_on = 'TF', right_on = 'Gene name') # merge tf list with biomart: join 'TF' with 'Gene name'
-    tf_list = tf_list.loc[:, ['TF', 'Gene stable ID', 'Transcript stable ID']].drop_duplicates() #remove individual versions
+    tf_list = tf_list.loc[:, ['TF', GENE_STABLE_ID, TRANSCRIPT_STABLE_ID]].drop_duplicates() #remove individual versions
     return tf_list
+
+def map_sf_ids(sf_list_raw: pd.DataFrame, biomart: pd.DataFrame) -> pd.DataFrame:
+    """Map SF gene names to Ensembl gene and transcript IDs.
+
+    Args:
+        sf_list_raw: DataFrame with a single column of SF gene names.
+        biomart: BioMart reference DataFrame.
+
+    Returns:
+        DataFrame with columns ``SF``, ``Gene stable ID``, ``Transcript stable ID``.
+    """
+    sf_list_raw = sf_list_raw.copy()
+    sf_list_raw.columns = ["SF"]
+    sf_list = sf_list_raw.merge(biomart, left_on="SF", right_on="Gene name")
+    sf_list = sf_list.loc[
+        :, ["SF", "Gene stable ID", "Transcript stable ID"]
+    ].drop_duplicates()
+    return sf_list
+
+
+def combine_tf_sf_lists(
+    tf_list: pd.DataFrame, sf_list: pd.DataFrame
+) -> pd.DataFrame:
+    """Combine TF and SF lists, marking overlapping genes as TF_SF.
+
+    Args:
+        tf_list: TF DataFrame with columns ``TF``, ``Gene stable ID``,
+            ``Transcript stable ID``.
+        sf_list: SF DataFrame with columns ``SF``, ``Gene stable ID``,
+            ``Transcript stable ID``.
+
+    Returns:
+        Combined DataFrame with columns ``Regulator_name``, ``Gene stable ID``,
+        ``Transcript stable ID``, ``Regulator_type``.
+    """
+    tf_list = tf_list.copy()
+    sf_list = sf_list.copy()
+
+    tf_list["Regulator_type"] = "TF"
+    sf_list["Regulator_type"] = "SF"
+    tf_list = tf_list.rename(columns={"TF": "Regulator_name"})
+    sf_list = sf_list.rename(columns={"SF": "Regulator_name"})
+
+    tf_genes = set(tf_list["Gene stable ID"])
+    sf_genes = set(sf_list["Gene stable ID"])
+    overlap_genes = tf_genes & sf_genes
+
+    combined = pd.concat([tf_list, sf_list], ignore_index=True)
+    combined.loc[
+        combined["Gene stable ID"].isin(overlap_genes), "Regulator_type"
+    ] = "TF_SF"
+    combined = combined.drop_duplicates(subset=["Transcript stable ID"], keep="first")
+    return combined
 
 
 def create_transcript_mapping(biomart):
