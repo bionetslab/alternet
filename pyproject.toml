@@ -47,6 +47,8 @@ dependencies = [
 # in the core 'project.dependencies' list.
 allow-direct-references = true
 
+[tool.hatch.build.targets.wheel]
+packages = ["alternet"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -68,35 +70,9 @@ xgboost = "*"
 graphviz = "*"
 openpyxl = ">=3.1.5,<4"
 
-
 [tool.pixi.pypi-dependencies]
-# This section remains for pure-Python packages not available or preferred from Conda,
-# but it currently only contains the local editable install.
-alternet = { path = ".", editable = true }
+alternet = { git = "https://github.com/bionetslab/alternet.git", branch = "alternet-2.0-manual-integration" }
 
-# --- KERNEL ENVIRONMENT  ---
-[tool.pixi.feature.kernel.dependencies]
-python = "*"
-dask = "*"
-distributed = "*"
-numpy = "*" # Retaining your version constraint
-pandas = "*"
-scikit-learn = "*"
-scipy = "*"
-scikit-learn-extra = "*"
-pyarrow = "*" 
-ipykernel = "*"
-numba = "*"
-xgboost="*"
-graphviz = "*"
-
-
-[tool.pixi.feature.kernel.pypi-dependencies]
-alternet = { path = ".", editable = true }
-
-[tool.pixi.feature.kernel.tasks]
-install-kernel = "python -m ipykernel install --user --name pixi_alternet --display-name pixi_alternet"
-uninstall-kernel = "jupyter kernelspec uninstall pixi_alternet"
 
 # --- DEFAULT TASKS ---
 [tool.pixi.tasks]
@@ -104,22 +80,6 @@ pytest = "pytest tests/ -v"
 reproduce-article-results = "python -m alternet.runners.run_pipeline_v2 --config configs/article_results_config.yaml --mode full"
 reproduce-article-results-downstream = "python -m alternet.runners.run_pipeline_v2 --config configs/article_results_config.yaml --mode downstream"
 construct-sf-database = "python -m alternet.runners.create_sf_database --saf data/f.1709029988.727.txt --sl data/Table_S1_datasets.xlsx --kegg data/KEGG_SPLICEOSOME.v2026.1.Hs.json --encode data/41586_2020_2077_MOESM3_ESM.xlsx -o data/splicefactors.csv"
+install-kernel = "python -m ipykernel install --user --name pixi_alternet --display-name pixi_alternet"
+uninstall-kernel = "jupyter kernelspec uninstall pixi_alternet"
 
-# --- DOCS ENVIRONMENT ---
-[tool.pixi.feature.docs.dependencies]
-python = "*"
-sphinx = "*"
-
-[tool.pixi.feature.docs.pypi-dependencies]
-alternet = { path = ".", editable = true }
-furo = "*"
-sphinx-autodoc-typehints = "*"
-nbsphinx = "*"
-pandoc = "*"
-
-[tool.pixi.feature.docs.tasks]
-build-docs = "sphinx-build -b html docs/ docs/_build/html"
-
-[tool.pixi.environments]
-kernel = ["kernel"]
-docs = ["docs"]
