@@ -1,5 +1,5 @@
 import pandas as pd
-from data_preprocessing import *
+from alternet.data_preprocessing import *
 
 class TissueNotFoundException(Exception):
     '''

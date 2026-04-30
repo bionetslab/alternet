@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-
+import numpy as np
 
 def create_hybrid_data(transcript_data, gene_data, tf_list, biomart_column='Transcript stable ID'):
     hybrid_data = pd.concat([transcript_data.loc[:, transcript_data.columns.isin(tf_list['Transcript stable ID'])], gene_data], axis =1)
@@ -34,8 +34,8 @@ def standardize_dataframe(df):
 
 
 
-def variance_filtering(transcript_data, variance_percentile = 0.7):
-    sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
+def variance_filtering(transcript_data, variance_percentile = 0.7, non_sample_cols = ['transcript_id', 'gene_id']):
+    sample_cols = [c for c in transcript_data.columns if c not in non_sample_cols]
     expression_values = transcript_data[sample_cols].values
     log_expr = np.log1p(expression_values)
     variances = np.var(log_expr, axis=1)
@@ -48,7 +48,7 @@ def variance_filtering(transcript_data, variance_percentile = 0.7):
 
 
 
-def remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled):
+def remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, transcript_data_matrix):
     # Remove problematic transcripts (NaN or zero variance)
     nan_cols = transcript_data_scaled.columns[transcript_data_scaled.isna().any()].tolist()
     zero_var_cols = transcript_data_matrix.columns[transcript_data_matrix.std() == 0].tolist()
@@ -66,4 +66,4 @@ def remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled):
 
     print(f"Final: {len(transcript_data_scaled.columns)} transcripts, {len(gene_data_scaled.columns)} genes")
 
-    return transcript_data_scaled, gene_data_scaled
+    return transcript_data_scaled, gene_data_scaled, transcript_data_matrix

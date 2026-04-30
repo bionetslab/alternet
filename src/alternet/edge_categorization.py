@@ -22,7 +22,7 @@ def categorize_source_resolution(edge_gg, net1_mean, net2_mean, net1_median, net
     best_tx = net2_best_tx.get(edge_gg, None)
     
     E1, E2 = S1_mean > 0, S2_mean > 0
-    reg_gene, target_gene = edge_gg.split('|')
+    reg_gene, target_gene = edge_gg.split('_')
     
     # Use MEAN importance for fold-change calculation
     if E2 and not E1:
@@ -51,6 +51,7 @@ def categorize_source_resolution(edge_gg, net1_mean, net2_mean, net1_median, net
         'ratio': S2_mean / (S1_mean + eps) if E1 else np.inf,
         'source_category': category
     }
+
 
 def canonical_vs_source_as(net1_tf,net2_tf):
 
