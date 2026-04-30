@@ -41,6 +41,7 @@ def map_sf_ids(sf_list_raw: pd.DataFrame, biomart: pd.DataFrame) -> pd.DataFrame
     return sf_list
 
 
+
 def combine_tf_sf_lists(
     tf_list: pd.DataFrame, sf_list: pd.DataFrame
 ) -> pd.DataFrame:
