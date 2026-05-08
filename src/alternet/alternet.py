@@ -1,5 +1,7 @@
 import pandas as pd
-from alternet.edge_categorization import *
+#from alternet.edge_categorization import *
+from postprocessing import *
+from plausibility_filtering import *
 
 class Alternet:
     __slots__ = [
@@ -15,14 +17,19 @@ class Alternet:
         'sample_cols', 
         'set_a', 
         'set_b', 
-        'set_c', 
+        'set_b_unpacked',
+        'set_c',
+        'set_c_unpacked' ,
         'set_d',
         'set_d_full',
         'MIN_FREQUENCY',
         'IMPORTANCE_PERCENTILE',
         'regulator_list',
         'gene2tx',
-        'tx2gene'
+        'tx2gene',
+        'gene_dominance',
+        'gene_n_isoforms',
+        'tx_expression_share'
     ]
 
     def __init__(
@@ -43,6 +50,7 @@ class Alternet:
         self.regulator_list = regulator_list
         self.transcript_col = transcript_col
         self.gene_col = gene_col
+        
 
         self.MIN_FREQUENCY = 10
         self.IMPORTANCE_PERCENTILE = 0.7
@@ -55,10 +63,15 @@ class Alternet:
         self.set_a = self._compute_set_a()
         self.set_d_full = self._compute_set_d_full()
         self.set_d = self._compute_set_d()
-        self.set_b = self._compute_set_b()
-        self.set_c = self._compute_set_c()
+        self.set_b, self.set_b_unpacked = self._compute_set_b()
+        self.set_c, self.set_c_unpacked = self._compute_set_c()
 
-
+        ## Filtering (only adding the information)
+        # self.gene_dominance, self.gene_n_isoforms, self.tx_expression_share = self._compute_dominance_metrics()
+        # self.set_a = self._filter_set_a()
+        # self.set_b = self._filter_set_b()
+        # self.set_c = self._filter_set_c()
+        # self.set_d = self._filter_set_d()
 
 
 
@@ -135,23 +148,22 @@ class Alternet:
         set_d = set_d.sort_values('median_importance', ascending=False)
         return set_d
 
+
     def _compute_set_b(self):
-        print('Computeing set B')
+        print('Computing set B')
         # Net2: ALL TF-like edges (TF + TF_SF) - they all act as TFs in gene-level target network
         net2_for_t2 = self.as_source[self.as_source['reg_type'].isin(['TF', 'TF_SF'])].copy()
         # Net3: TF only (TF_SF is handled via Set D)
         net3_tf_only = self.as_full[self.as_full['reg_type'] == 'TF'].copy()
         # Add the ones from set d which are tf edges
         tfsf_tf_like = self.set_d_full[self.set_d_full['tfsf_category'] == 'tfsf_tf_like'].copy()
-        
-        net3_tfsf = self.as_full[self.as_full['reg_type'] == 'TF_SF'].copy()
-        set_b = as_source_vs_as_full(net2_for_t2, net3_tf_only, tfsf_tf_like, net3_tfsf, self.tx2gene)
-        print(set_b)
-        set_b_unpacked = unpack_set_b(net3_tf_only, tfsf_tf_like, net3_tfsf, set_b)
-        print(set_b_unpacked)
-        set_b_unpacked = annotate_set_b(set_b,set_b_unpacked)
-        print(set_b_unpacked)
-        return set_b_unpacked
+        net_3_for_t2 = pd.concat([net3_tf_only, tfsf_tf_like])
+        set_b = as_source_vs_as_full(net2_for_t2, net_3_for_t2, self.tx2gene)
+        set_b['reg_type'] = set_b['source_transcript'].map(tx_to_regtype)
+        set_b_unpacked = unpack_set_b(net_3_for_t2, set_b)
+        set_b = annotate_set_b(set_b,set_b_unpacked)
+        return set_b, set_b_unpacked
+
 
     def _compute_set_c(self):
         net3_tfsf = self.as_full[self.as_full['reg_type'] == 'TF_SF'].copy()
@@ -159,9 +171,37 @@ class Alternet:
         net3_sf = self.as_full[self.as_full['reg_type'] == 'SF'].copy()
         udf = self.usage_df.drop(columns = {'gene_id'}).set_index("transcript_id")
         t_temps = self.transcript_data.drop(columns = {self.gene_col}).set_index(self.transcript_col)
-
-        set_c = compute_set_c(net3_sf, t_temps, self.gene2tx, udf, self.reliability_df, tfsf_sf_like, self.sample_cols, net3_tfsf)
-        set_c_unpacked = unpack_set_c(net3_sf, tfsf_sf_like, net3_tfsf, set_c)
+        sf_edges = pd.concat([net3_sf, tfsf_sf_like])
+        set_c = compute_set_c(sf_edges, t_temps, self.gene2tx, udf, self.reliability_df, self.sample_cols)
+        print(set_c)
+        set_c['reg_type'] = set_c['source_transcript'].map(tx_to_regtype)
+        set_c_unpacked = unpack_set_c(net3_sf, set_c)
         set_c = annotate_set_c(set_c, set_c_unpacked)
-        return set_c
+        return set_c, set_c_unpacked
+
+
+    def _compute_dominance_metrics(self):
+        return compute_dominance_metrics(self.transcript_data, self.sample_cols, min_tpm=0.1)
+
+    def _filter_set_a(self):
+        print('Filtering set A')
+        return filter_set_a(self.set_a, self.gene_dominance, self.gene_n_isoforms)
+
+    def _filter_set_b(self):
+        print('Filtering set B')
+        return filter_set_b(self.set_b, self.gene_dominance, self.gene_n_isoforms)
+
+    def _filter_set_c(self):
+        print('Filtering set C')
+        return filter_set_c(self.set_c, self.gene_n_isoforms)
+    
+    def _filter_set_d(self):
+        print('Filtering set D')
+        set_d_filtered = filter_set_d(self.set_d, self.gene_dominance, self.gene_n_isoforms)
+        print(set_d_filtered)
+        return set_d_filtered.copy()
+    
+        
+    
+        
         

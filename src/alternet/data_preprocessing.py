@@ -47,13 +47,12 @@ def variance_filtering(transcript_data, variance_percentile = 0.7, non_sample_co
     return transcript_data
 
 
-
 def remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, transcript_data_matrix):
     # Remove problematic transcripts (NaN or zero variance)
     nan_cols = transcript_data_scaled.columns[transcript_data_scaled.isna().any()].tolist()
     zero_var_cols = transcript_data_matrix.columns[transcript_data_matrix.std() == 0].tolist()
     bad_transcripts = set(nan_cols + zero_var_cols)
-
+    print(bad_transcripts)
     if bad_transcripts:
         good_transcripts = [c for c in transcript_data_scaled.columns if c not in bad_transcripts]
         transcript_data_scaled = transcript_data_scaled[good_transcripts]
@@ -64,6 +63,5 @@ def remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, tra
     transcript_data_scaled = transcript_data_scaled.fillna(0)
     gene_data_scaled = gene_data_scaled.fillna(0)
 
-    print(f"Final: {len(transcript_data_scaled.columns)} transcripts, {len(gene_data_scaled.columns)} genes")
 
     return transcript_data_scaled, gene_data_scaled, transcript_data_matrix

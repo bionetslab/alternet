@@ -152,7 +152,6 @@ def calculate_transcript_usage(df, gene_col='gene_id', transcript_col='transcrip
     return usage_df, reliability_df, metadata
 
 
-
 def compute_tfsf_evidence(reg_tx, target_tx, expr_df_indexed, usage_df_indexed, 
                           reliability_df_indexed, sf_expr_matrix):
     
@@ -262,45 +261,24 @@ def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_d
 
     if len(tfsf_valid) > 0:
         
-        tfsf_records = tfsf_valid.to_dict('records')
-
-        # 2. Define the worker function for a chunk of rows
-        def process_tfsf_chunk(chunk):
-            results = []
-            for row in chunk:
-                # Compute the evidence metrics
-                evidence = compute_tfsf_evidence(
-                    row['source_transcript'], row['target_transcript'],
-                    transcript_data, usage_df, reliability_df,
-                    sf_expr_matrix
-                )
-                
-                # Combine the original row data with the new evidence
-                # This uses dictionary unpacking (**) for a clean merge
-                results.append({
-                    'source_transcript': row['source_transcript'],
-                    'source_gene': row['source_gene'],
-                    'target_transcript': row['target_transcript'],
-                    'target_gene': row['target_gene'],
-                    'mean_importance': row['mean_importance'],
-                    'median_importance': row['median_importance'],
-                    **evidence
-                })
-            return results
-
-        # 3. Split into 16 batches
-        n_cores = 16
-        chunks = np.array_split(tfsf_records, n_cores)
-
-        # 4. Execute in parallel
-        # n_jobs=16 distributes the chunks across your CPU cores
-        parallel_results = Parallel(n_jobs=n_cores)(
-            delayed(process_tfsf_chunk)(chunk) for chunk in chunks
-        )
-
-        # 5. Flatten the results and create the final DataFrame
-        flattened_results = [item for sublist in parallel_results for item in sublist]
-        set_d_full = pd.DataFrame(flattened_results)
+        set_d_rows = []
+        for idx, (_, row) in enumerate(tfsf_valid.iterrows()):
+            evidence = compute_tfsf_evidence(
+                row['source_transcript'], row['target_transcript'],
+                transcript_data, usage_df, reliability_df,
+                sf_expr_matrix
+            )
+            set_d_rows.append({
+                'source_transcript': row['source_transcript'],
+                'source_gene': row['source_gene'],
+                'target_transcript': row['target_transcript'],
+                'target_gene': row['target_gene'],
+                'mean_importance': row['mean_importance'],
+                'median_importance': row['median_importance'],
+                **evidence
+            })
+            
+        set_d_full = pd.DataFrame(set_d_rows)
         
         # FDR correction
         valid_tf = set_d_full['tf_pval_conditional'].notna() & (set_d_full['tf_pval_conditional'] > 0)
@@ -343,7 +321,6 @@ def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_d
         set_d_full['tfsf_category'] = 'tfsf_ambiguous'
     
     return set_d_full
-
 
 def as_source_vs_as_full(net2_for_t2, net3_tf_only, tx2gene, epsilon = 1e-6):
 
@@ -445,7 +422,7 @@ def categorize_target_resolution(edge_tg, net2_mean, net3_mean, net3_max, net3_d
     }
 
 
-def unpack_set_b(net3_tf_only, set_b):
+def unpack_set_b(net3_tf_only, tfsf_tf_like, net3_tfsf, set_b):
     """_summary_
 
     Args:
@@ -462,9 +439,19 @@ def unpack_set_b(net3_tf_only, set_b):
     column_names = ['source_transcript', 'regulator_gene', 'target_transcript', 'target_gene', 'net3_mean_importance', 'net3_median_importance', 'net3_frequency']
     
 
-    set_b_unpacked = net3_tf_only[prior_column_names].copy()
-    set_b_unpacked.columns = column_names
-    #set_b_unpacked['reg_type'] = 'TF'
+    net3_tf_unpack = net3_tf_only[prior_column_names].copy()
+    net3_tf_unpack.columns = column_names
+    net3_tf_unpack['reg_type'] = 'TF'
+
+    # Source 2: tfsf_tf_like edges from net3_tfsf
+    if len(tfsf_tf_like) > 0:
+        tfsf_tf_like_regtx_set = set(tfsf_tf_like['source_transcript'].unique())
+        net3_tfsf_unpack = net3_tfsf[net3_tfsf['source_transcript'].isin(tfsf_tf_like_regtx_set)][prior_column_names].copy()
+        net3_tfsf_unpack.columns = column_names
+        net3_tfsf_unpack['reg_type'] = 'TF_SF'
+        set_b_unpacked = pd.concat([net3_tf_unpack, net3_tfsf_unpack], ignore_index=True)
+    else:
+        set_b_unpacked = net3_tf_unpack.copy()
 
     # Join with Set B categorization
     # Create join key
@@ -485,15 +472,15 @@ def unpack_set_b(net3_tf_only, set_b):
     # Drop join key
     set_b_unpacked = set_b_unpacked.drop(columns=['edge_tg'])
 
-    #print(f"Set B Unpacked: {len(set_b_unpacked):,} transcript-level edges")
-    #print(f"  From TF edges: {(set_b_unpacked['reg_type'] == 'TF').sum():,}")
-    #print(f"  From TF_SF (tf_like): {(set_b_unpacked['reg_type'] == 'TF_SF').sum():,}")
-    #print(f"\nCategory distribution (inherited):")
-    #or cat, count in set_b_unpacked['target_category'].value_counts().items():
-      #  print(f"  {cat:30} {count:>8,} ({count/len(set_b_unpacked)*100:>5.1f}%)")
-    #print(f"\nRank distribution:")
-    #print(f"  Rank 1 (dominant target tx): {(set_b_unpacked['target_rank_within_edge'] == 1).sum():,}")
-    #print(f"  Rank 2+: {(set_b_unpacked['target_rank_within_edge'] > 1).sum():,}")
+    print(f"Set B Unpacked: {len(set_b_unpacked):,} transcript-level edges")
+    print(f"  From TF edges: {(set_b_unpacked['reg_type'] == 'TF').sum():,}")
+    print(f"  From TF_SF (tf_like): {(set_b_unpacked['reg_type'] == 'TF_SF').sum():,}")
+    print(f"\nCategory distribution (inherited):")
+    for cat, count in set_b_unpacked['target_category'].value_counts().items():
+        print(f"  {cat:30} {count:>8,} ({count/len(set_b_unpacked)*100:>5.1f}%)")
+    print(f"\nRank distribution:")
+    print(f"  Rank 1 (dominant target tx): {(set_b_unpacked['target_rank_within_edge'] == 1).sum():,}")
+    print(f"  Rank 2+: {(set_b_unpacked['target_rank_within_edge'] > 1).sum():,}")
 
     return set_b_unpacked
   
@@ -546,7 +533,7 @@ def compute_sf_splicing_evidence(sf_tx, target_gene, target_tx_set, mean_importa
                                   min_isoforms_for_splicing = 2, top_m_expressed = 3):
 
     result = {
-        'source_transcript': sf_tx, 'source_gene': sf_gene, 'target_gene': target_gene,
+        'sf_tx': sf_tx, 'sf_gene': sf_gene, 'target_gene': target_gene,
         'target_tx_set': ','.join(sorted(target_tx_set)) if isinstance(target_tx_set, set) else str(target_tx_set),
         'mean_importance_sum': mean_importance_sum, 'mean_importance_max': mean_importance_max,
         'median_importance_sum': median_importance_sum, 'median_importance_max': median_importance_max,
@@ -634,8 +621,6 @@ def compute_sf_splicing_evidence(sf_tx, target_gene, target_tx_set, mean_importa
     return result
 
 
-
-
 def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_indexed, reliability_df_indexed, sample_cols, epsilon=1e-6, n_cores=16):
     # Set C and Set D: PSI/Usage thresholds
 
@@ -655,6 +640,8 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
     sf_expr = sf_expr.set_index('transcript_id')[sample_cols]
     sf_expr_dict = {tx: np.array(sf_expr.loc[tx].values, dtype=np.float64) for tx in sf_expr.index}
 
+    print(len(sf_expr_dict))
+    print(len(sf_edges))
 
     if len(sf_expr_dict) > 0:
         start = time.monotonic()
@@ -688,12 +675,14 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
         flattened_results = [item for sublist in parallel_results for item in sublist]
         set_c = pd.DataFrame(flattened_results)
 
+        print(time.monotonic()-start)
+
+        print(f"\nSet C SF-only: {len(set_c):,} rows")
     else:
         set_c = sf_edges.copy()
         set_c['sf_category'] = 'sf_expression_associated'
 
 
-    print(set_c)
     # Sort by median importance (AlterNet 1.0 style)
     set_c = set_c.sort_values('median_importance_sum', ascending=False)
 
@@ -708,22 +697,36 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
     return set_c
 
 
-def unpack_set_c(net3_sf, set_c):
+def unpack_set_c(net3_sf, tfsf_sf_like, net3_tfsf, set_c):
     
-    set_c_unpacked = net3_sf[['source_transcript', 'source_gene', 'target_transcript',
+    net3_sf_unpack = net3_sf[['source_transcript', 'source_gene', 'target_transcript',
                             'target_gene', 'mean_importance', 'median_importance',
                             'frequency']].copy()
                             
-    set_c_unpacked.columns = ['source_transcript', 'source_gene', 'target_transcript', 'target_gene',
+    net3_sf_unpack.columns = ['sf_tx', 'sf_gene', 'target_transcript', 'target_gene',
                             'net3_mean_importance', 'net3_median_importance', 'net3_frequency']
     
-    #net3_sf_unpack['reg_type'] = 'SF'
+    net3_sf_unpack['reg_type'] = 'SF'
 
+    # Source 2: tfsf_sf_like edges from net3_tfsf
+    if len(tfsf_sf_like) > 0:
+        tfsf_sf_like_regtx_set = set(tfsf_sf_like['source_transcript'].unique())
+        net3_tfsf_sf_unpack = net3_tfsf[
+            net3_tfsf['source_transcript'].isin(tfsf_sf_like_regtx_set)
+        ][['source_transcript', 'source_gene', 'target_transcript',
+        'target_gene', 'mean_importance', 'median_importance',
+        'frequency']].copy()
+        net3_tfsf_sf_unpack.columns = ['sf_tx', 'sf_gene', 'target_transcript', 'target_gene',
+                                        'net3_mean_importance', 'net3_median_importance', 'net3_frequency']
+        net3_tfsf_sf_unpack['reg_type'] = 'TF_SF'
+        set_c_unpacked = pd.concat([net3_sf_unpack, net3_tfsf_sf_unpack], ignore_index=True)
+    else:
+        set_c_unpacked = net3_sf_unpack.copy()
 
     # Join with Set C categorization
-    set_c_unpacked['edge_sg'] = set_c_unpacked['source_transcript'] + '_' + set_c_unpacked['target_gene']
-    set_c_key = set_c[['source_transcript', 'target_gene', 'sf_category']].copy()
-    set_c_key['edge_sg'] = set_c_key['source_transcript'] + '_' + set_c_key['target_gene']
+    set_c_unpacked['edge_sg'] = set_c_unpacked['sf_tx'] + '|' + set_c_unpacked['target_gene']
+    set_c_key = set_c[['sf_tx', 'target_gene', 'sf_category']].copy()
+    set_c_key['edge_sg'] = set_c_key['sf_tx'] + '|' + set_c_key['target_gene']
 
     set_c_unpacked = set_c_unpacked.merge(
         set_c_key[['edge_sg', 'sf_category']],
@@ -738,16 +741,14 @@ def unpack_set_c(net3_sf, set_c):
     set_c_unpacked = set_c_unpacked.sort_values('net3_median_importance', ascending=False)
     set_c_unpacked = set_c_unpacked.drop(columns=['edge_sg'])
 
-    # print(f"Set C Unpacked: {len(set_c_unpacked):,} transcript-level edges")
-    # print(f"  From SF edges: {(set_c_unpacked['reg_type'] == 'SF').sum():,}")
-    # print(f"  From TF_SF (sf_like): {(set_c_unpacked['reg_type'] == 'TF_SF').sum():,}")
-    # print(f"\nCategory distribution (inherited):")
-    # for cat, count in set_c_unpacked['sf_category'].value_counts().items():
-    #     print(f"  {cat:35} {count:>8,} ({count/len(set_c_unpacked)*100:>5.1f}%)")
+    print(f"Set C Unpacked: {len(set_c_unpacked):,} transcript-level edges")
+    print(f"  From SF edges: {(set_c_unpacked['reg_type'] == 'SF').sum():,}")
+    print(f"  From TF_SF (sf_like): {(set_c_unpacked['reg_type'] == 'TF_SF').sum():,}")
+    print(f"\nCategory distribution (inherited):")
+    for cat, count in set_c_unpacked['sf_category'].value_counts().items():
+        print(f"  {cat:35} {count:>8,} ({count/len(set_c_unpacked)*100:>5.1f}%)")
     
     return set_c_unpacked
-
-
 
 def annotate_set_c(set_c, set_c_unpacked):
     pres_cols3 = set_c.apply(get_presentation, axis=1)
@@ -759,7 +760,7 @@ def annotate_set_c(set_c, set_c_unpacked):
     _dominant_map3 = set_c_unpacked[
         set_c_unpacked['target_rank_within_edge'] == 1
     ].copy()
-    _dominant_map3['edge_sg'] = _dominant_map3['source_transcript'] + '_' + _dominant_map3['target_gene']
+    _dominant_map3['edge_sg'] = _dominant_map3['sf_tx'] + '_' + _dominant_map3['target_gene']
     _dominant_dict3 = dict(zip(_dominant_map3['edge_sg'], _dominant_map3['target_transcript']))
 
     def get_dominant_t3(row):
@@ -767,7 +768,7 @@ def annotate_set_c(set_c, set_c_unpacked):
         if pd.notna(row.get('best_tx', None)) and row.get('best_tx', '') != '':
             return row['best_tx']
         # Fallback to importance-based argmax
-        key = row['source_transcript'] + '_' + row['target_gene']
+        key = row['sf_tx'] + '_' + row['target_gene']
         return _dominant_dict3.get(key, '')
 
     set_c['target_tx_dominant'] = set_c.apply(get_dominant_t3, axis=1)
@@ -778,5 +779,3 @@ def annotate_set_c(set_c, set_c_unpacked):
     print(f"  target_tx_dominant from best_tx: {set_c['best_tx'].notna().sum() - (set_c['best_tx'] == '').sum():,}")
 
     return set_c
-
-
