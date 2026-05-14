@@ -48,7 +48,7 @@ dependencies = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["alternet"]
+packages = ["src/alternet"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -69,10 +69,13 @@ pytest = "*"
 xgboost = "*"
 graphviz = "*"
 openpyxl = ">=3.1.5,<4"
+plotly = ">=6.6.0,<7"
+nbformat = ">=5.10.4,<6"
 
+#[tool.pixi.pypi-dependencies]
+#alternet = { git = "https://github.com/bionetslab/alternet.git", branch = "alternet-2.0-manual-integration" }
 [tool.pixi.pypi-dependencies]
-alternet = { git = "https://github.com/bionetslab/alternet.git", branch = "alternet-2.0-manual-integration" }
-
+alternet = { path = ".", editable = true }
 
 # --- DEFAULT TASKS ---
 [tool.pixi.tasks]
