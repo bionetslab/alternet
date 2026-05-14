@@ -38,7 +38,7 @@ dependencies = [
     "networkx",
     "igraph",
     "gseapy",
-    "signifikante @ git+ssh://git@github.com/bionetslab/SignifiKANTE.git@main",
+    "signifikante @ git+https://github.com/bionetslab/SignifiKANTE.git",
     "graphviz", "gprofiler-official>=1.0.0,<2",
     ]
 
