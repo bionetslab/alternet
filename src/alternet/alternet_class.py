@@ -1,7 +1,7 @@
 import pandas as pd
-#from alternet.edge_categorization import *
-from postprocessing import *
-from plausibility_filtering import *
+from alternet.edge_categorization import *
+from alternet.postprocessing import *
+from alternet.plausibility_filtering import *
 
 class Alternet:
     __slots__ = [
@@ -29,7 +29,8 @@ class Alternet:
         'tx2gene',
         'gene_dominance',
         'gene_n_isoforms',
-        'tx_expression_share'
+        'tx_expression_share',
+        'tx_to_regtype'
     ]
 
     def __init__(
@@ -39,8 +40,11 @@ class Alternet:
         as_full: pd.DataFrame, 
         transcript_data: pd.DataFrame,
         regulator_list: pd.DataFrame,
+        tx_to_regtype: dict,
         gene_col: str ='gene_id', 
-        transcript_col: str='transcript_id'
+        transcript_col: str='transcript_id',
+        min_frequency: int= 10,
+        importance_percentile: float = 0.7
         
     ):
         self.canonical = canonical
@@ -48,12 +52,13 @@ class Alternet:
         self.as_full = as_full
         self.transcript_data = transcript_data
         self.regulator_list = regulator_list
+        self.tx_to_regtype = tx_to_regtype
         self.transcript_col = transcript_col
         self.gene_col = gene_col
         
 
-        self.MIN_FREQUENCY = 10
-        self.IMPORTANCE_PERCENTILE = 0.7
+        self.MIN_FREQUENCY = min_frequency
+        self.IMPORTANCE_PERCENTILE = importance_percentile
 
         self.gene_data, self.sample_cols = self._compute_gene_counts()
         self.gene2tx = self._gene2tx()
@@ -67,11 +72,11 @@ class Alternet:
         self.set_c, self.set_c_unpacked = self._compute_set_c()
 
         ## Filtering (only adding the information)
-        # self.gene_dominance, self.gene_n_isoforms, self.tx_expression_share = self._compute_dominance_metrics()
-        # self.set_a = self._filter_set_a()
-        # self.set_b = self._filter_set_b()
-        # self.set_c = self._filter_set_c()
-        # self.set_d = self._filter_set_d()
+        self.gene_dominance, self.gene_n_isoforms, self.tx_expression_share = self._compute_dominance_metrics()
+        self.set_a = self._filter_set_a()
+        self.set_b = self._filter_set_b()
+        self.set_c = self._filter_set_c()
+        self.set_d = self._filter_set_d()
 
 
 
@@ -159,7 +164,7 @@ class Alternet:
         tfsf_tf_like = self.set_d_full[self.set_d_full['tfsf_category'] == 'tfsf_tf_like'].copy()
         net_3_for_t2 = pd.concat([net3_tf_only, tfsf_tf_like])
         set_b = as_source_vs_as_full(net2_for_t2, net_3_for_t2, self.tx2gene)
-        set_b['reg_type'] = set_b['source_transcript'].map(tx_to_regtype)
+        set_b['reg_type'] = set_b['source_transcript'].map(self.tx_to_regtype)
         set_b_unpacked = unpack_set_b(net_3_for_t2, set_b)
         set_b = annotate_set_b(set_b,set_b_unpacked)
         return set_b, set_b_unpacked
@@ -174,7 +179,7 @@ class Alternet:
         sf_edges = pd.concat([net3_sf, tfsf_sf_like])
         set_c = compute_set_c(sf_edges, t_temps, self.gene2tx, udf, self.reliability_df, self.sample_cols)
         print(set_c)
-        set_c['reg_type'] = set_c['source_transcript'].map(tx_to_regtype)
+        set_c['reg_type'] = set_c['source_transcript'].map(self.tx_to_regtype)
         set_c_unpacked = unpack_set_c(net3_sf, set_c)
         set_c = annotate_set_c(set_c, set_c_unpacked)
         return set_c, set_c_unpacked

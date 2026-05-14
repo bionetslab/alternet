@@ -43,8 +43,9 @@ def filter_set_a(set_a, gene_dominance, gene_n_isoforms,
     df = set_a.copy()
     
     # Add dominance and isoform count
-    df['reg_dominance'] = df['regulator_gene'].map(gene_dominance).fillna(0.5)
-    df['reg_n_isoforms'] = df['regulator_gene'].map(gene_n_isoforms).fillna(1)
+    # change regulator to source!
+    df['reg_dominance'] = df['source_gene'].map(gene_dominance).fillna(0.5)
+    df['reg_n_isoforms'] = df['source_gene'].map(gene_n_isoforms).fillna(1)
     
     # Initialize filter columns
     df['is_plausible'] = True
@@ -58,6 +59,8 @@ def filter_set_a(set_a, gene_dominance, gene_n_isoforms,
     df['ratio_S2_S1'] = df[s2_col] / (df[s1_col] + eps)
     
     # Filter 1: Regulator equivalence (single isoform)
+    # There is a single isoform it should be found in both nets (should be equivalent)
+    # It is not, hence it is implausible.
     mask_single_iso = df['reg_n_isoforms'] == 1
     mask_iso_specific = df['source_category'].isin(['source_isoform_specific', 'source_gene_specific'])
     
@@ -71,6 +74,8 @@ def filter_set_a(set_a, gene_dominance, gene_n_isoforms,
     
     # For isoform-specific with dominant regulator, require stronger evidence
     # (S2 >> S1, ratio should be very high)
+    # Similar reasoning: it is dominant, but claimed to be isoform specific.
+    # If there is a regulation specific to this isoform w
     weak_evidence = mask_dominant & mask_isoform_specific & (df['ratio_S2_S1'] < 2.0)
     df.loc[weak_evidence, 'is_plausible'] = False
     df.loc[weak_evidence, 'filter_reasons'] += 'dominant_reg_weak_evidence;'

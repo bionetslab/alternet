@@ -47,7 +47,7 @@ def categorize_source_resolution(edge_gg, net1_mean, net2_mean, net1_median, net
     
     return {
         'edge_key': edge_gg,
-        'regulator_gene': reg_gene, 'target_gene': target_gene, 'best_tx': best_tx,
+        'source_gene': reg_gene, 'target_gene': target_gene, 'best_tx': best_tx,
         'S1_mean': S1_mean, 'S2_mean': S2_mean,
         'S1_median': S1_median, 'S2_median': S2_median,
         'E1': E1, 'E2': E2,
@@ -459,7 +459,7 @@ def unpack_set_b(net3_tf_only, set_b):
     """
 
     prior_column_names = ['source_transcript', 'source_gene', 'target_transcript','target_gene', 'mean_importance', 'median_importance',  'frequency']
-    column_names = ['source_transcript', 'regulator_gene', 'target_transcript', 'target_gene', 'net3_mean_importance', 'net3_median_importance', 'net3_frequency']
+    column_names = ['source_transcript', 'source_gene', 'target_transcript', 'target_gene', 'net3_mean_importance', 'net3_median_importance', 'net3_frequency']
     
 
     set_b_unpacked = net3_tf_only[prior_column_names].copy()
@@ -635,7 +635,6 @@ def compute_sf_splicing_evidence(sf_tx, target_gene, target_tx_set, mean_importa
 
 
 
-
 def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_indexed, reliability_df_indexed, sample_cols, epsilon=1e-6, n_cores=16):
     # Set C and Set D: PSI/Usage thresholds
 
@@ -693,7 +692,6 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
         set_c['sf_category'] = 'sf_expression_associated'
 
 
-    print(set_c)
     # Sort by median importance (AlterNet 1.0 style)
     set_c = set_c.sort_values('median_importance_sum', ascending=False)
 
