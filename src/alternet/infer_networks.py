@@ -14,6 +14,11 @@ import argparse
 import os
 import sys
 
+def write_dict_to_yaml(data, filepath):
+    """Write dictionary to YAML file."""
+    with open(filepath, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -82,18 +87,17 @@ def main():
     
     N_RUNS = 10
 
-    tissue_list = ['Blood', 'Brain', 'Adipose Tissue', 'Muscle', 'Blood Vessel', 
-                   'Heart', 'Ovary', 'Uterus', 'Vagina', 'Breast', 'Skin',
-                   'Salivary Gland', 'Adrenal Gland', 'Thyroid', 'Lung', 'Spleen',
-                   'Pancreas', 'Esophagus', 'Stomach', 'Colon', 'Small Intestine',
-                   'Prostate', 'Testis', 'Nerve', 'Pituitary', 'Liver', 'Kidney',
-                   'Cervix Uteri', 'Fallopian Tube', 'Bladder', 'Bone Marrow']
-
-
-
     try:
         
-        runtime = {}
+        runtime_filepath = op.join(results_path_tissue, f"{CONDITION}_runtime.yaml")
+
+        # 2. Initialize or load the existing data
+        if op.exists(runtime_filepath):
+            with open(runtime_filepath, 'r') as f:
+                runtime = yaml.safe_load(f) or {}  # 'or {}' handles empty files safely
+        else:
+            runtime = {}
+
         CONDITION = TISSUE
         results_path_tissue = op.join(results_path, TISSUE)
         os.makedirs(results_path_tissue, exist_ok=True)
@@ -138,60 +142,67 @@ def main():
             tf_list
         )
 
-        start = time.monotonic()
-        canonical_grn = inference(
-            gene_data=gene_data_scaled,
-            tf_list=tf_genes_in_data,
-            target_names='all',
-            n_runs=N_RUNS
-        )
-        runtime['canonical'] = time.monotonic() - start
 
-        canonical_grn = canonical_grn.rename(columns={'source': 'source_gene', 'target': 'target_gene'})
-        canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
-        canonical_grn.to_csv(op.join(results_path_tissue, f"{CONDITION}_canonical_raw.tsv"), sep='\t', index=False)
+        output_filepath_canonical = op.join(results_path_tissue, f"{CONDITION}_canonical_raw.tsv")
+        if not op.exists(output_filepath_canonical):
+            print(f"File not found. Running GRN inference for {CONDITION}...")
+            start = time.monotonic()
+            canonical_grn = inference(
+                gene_data=gene_data_scaled,
+                tf_list=tf_genes_in_data,
+                target_names='all',
+                n_runs=N_RUNS
+            )
+            runtime['canonical'] = time.monotonic() - start
 
-
-        start = time.monotonic()
-        as_source_grn = inference(
-            gene_data=hybrid_data,
-            tf_list=tf_transcripts_in_data,
-            target_names=target_genes,
-            n_runs=N_RUNS
-        )
-        runtime['as_aware_source'] = time.monotonic() - start
-
-        as_source_grn = as_source_grn.rename(columns={'source': 'source_transcript', 'target': 'target_gene'})
-        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
-        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
-        as_source_grn.to_csv(op.join(results_path_tissue, f"{CONDITION}_as_aware_source_raw.tsv"), sep='\t', index=False)
+            canonical_grn = canonical_grn.rename(columns={'source': 'source_gene', 'target': 'target_gene'})
+            canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
+            canonical_grn.to_csv(output_filepath_canonical, sep='\t', index=False)
+            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
 
 
+        output_filepath_assource = op.join(results_path_tissue, f"{CONDITION}_as_aware_source_raw.tsv")
+        if not op.exists(output_filepath_canonical):
+            print(f"File not found. Running GRN inference for {CONDITION}...")
+            start = time.monotonic()
+            as_source_grn = inference(
+                gene_data=hybrid_data,
+                tf_list=tf_transcripts_in_data,
+                target_names=target_genes,
+                n_runs=N_RUNS
+            )
+            runtime['as_aware_source'] = time.monotonic() - start
 
-
-        start = time.monotonic()
-        fully_as_grn = inference(
-            gene_data=transcript_data_scaled,
-            tf_list=regulator_transcripts_in_data,
-            target_names='all',
-            n_runs=N_RUNS
-        )
-        runtime['fully_as_aware'] = time.monotonic() - start
-
-        fully_as_grn = fully_as_grn.rename(columns={'source': 'source_transcript', 'target': 'target_transcript'})
-        fully_as_grn['source_gene'] = fully_as_grn['source_transcript'].map(tx2gene)
-        fully_as_grn['target_gene'] = fully_as_grn['target_transcript'].map(tx2gene)
-        fully_as_grn['reg_type'] = fully_as_grn['source_transcript'].map(tx_to_regtype)
-        fully_as_grn.to_csv(op.join(results_path_tissue, f"{CONDITION}_fully_as_aware_raw.tsv"), sep='\t', index=False)
+            as_source_grn = as_source_grn.rename(columns={'source': 'source_transcript', 'target': 'target_gene'})
+            as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
+            as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
+            as_source_grn.to_csv(output_filepath_assource, sep='\t', index=False)
+            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
 
 
 
-        def write_dict_to_yaml(data, filepath):
-            """Write dictionary to YAML file."""
-            with open(filepath, 'w') as f:
-                yaml.dump(data, f, default_flow_style=False)
+        output_filepath_as_complete = op.join(results_path_tissue, f"{CONDITION}_fully_as_aware_raw.tsv")
+        if not op.exists(output_filepath_canonical):
+            print(f"File not found. Running GRN inference for {CONDITION}...")
+            start = time.monotonic()
+            fully_as_grn = inference(
+                gene_data=transcript_data_scaled,
+                tf_list=regulator_transcripts_in_data,
+                target_names='all',
+                n_runs=N_RUNS
+            )
+            runtime['fully_as_aware'] = time.monotonic() - start
+
+            fully_as_grn = fully_as_grn.rename(columns={'source': 'source_transcript', 'target': 'target_transcript'})
+            fully_as_grn['source_gene'] = fully_as_grn['source_transcript'].map(tx2gene)
+            fully_as_grn['target_gene'] = fully_as_grn['target_transcript'].map(tx2gene)
+            fully_as_grn['reg_type'] = fully_as_grn['source_transcript'].map(tx_to_regtype)
+            fully_as_grn.to_csv(output_filepath_as_complete, sep='\t', index=False)
+            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+
 
         runtime['total'] = runtime['canonical'] + runtime['as_aware_source'] + runtime['fully_as_aware']
+        
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
         print(f"\nTotal inference time: {runtime['total']/60:.2f} minutes")
 
