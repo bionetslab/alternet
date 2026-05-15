@@ -87,127 +87,124 @@ def main():
     
     N_RUNS = 10
 
-    try:
         
-        runtime_filepath = op.join(results_path_tissue, f"{CONDITION}_runtime.yaml")
+    runtime_filepath = op.join(results_path_tissue, f"{CONDITION}_runtime.yaml")
 
-        # 2. Initialize or load the existing data
-        if op.exists(runtime_filepath):
-            with open(runtime_filepath, 'r') as f:
-                runtime = yaml.safe_load(f) or {}  # 'or {}' handles empty files safely
-        else:
-            runtime = {}
+    # 2. Initialize or load the existing data
+    if op.exists(runtime_filepath):
+        with open(runtime_filepath, 'r') as f:
+            runtime = yaml.safe_load(f) or {}  # 'or {}' handles empty files safely
+    else:
+        runtime = {}
 
-        CONDITION = TISSUE
-        results_path_tissue = op.join(results_path, TISSUE)
-        os.makedirs(results_path_tissue, exist_ok=True)
-        
-        params = {'sample_attributes': op.join(gtex_data_dir, 'GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt'), 'tissue': TISSUE, 'transcript_data':op.join(gtex_data_dir, 'GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_tpm.gct')}
-        tissue_ids = retrieve_GTEX_tissue_sampleids(params['sample_attributes'], tissue=params['tissue'])
-        transcript_data = read_GTEX_transcript_expression(params['transcript_data'], tissue_ids)
-        transcript_data = clean_GTEX_tissue_transcript_counts(transcript_data, biomart)
-        transcript_data = variance_filtering(transcript_data)
-
-
-        sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
-        gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
-
-        # Create expression matrices (samples × features)
-        gene_data_matrix = gene_data.set_index('gene_id')[sample_cols].T
-        transcript_data_matrix = transcript_data.set_index('transcript_id')[sample_cols].T
+    CONDITION = TISSUE
+    results_path_tissue = op.join(results_path, TISSUE)
+    os.makedirs(results_path_tissue, exist_ok=True)
+    
+    params = {'sample_attributes': op.join(gtex_data_dir, 'GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt'), 'tissue': TISSUE, 'transcript_data':op.join(gtex_data_dir, 'GTEx_Analysis_2017-06-05_v8_RSEMv1.3.0_transcript_tpm.gct')}
+    tissue_ids = retrieve_GTEX_tissue_sampleids(params['sample_attributes'], tissue=params['tissue'])
+    transcript_data = read_GTEX_transcript_expression(params['transcript_data'], tissue_ids)
+    transcript_data = clean_GTEX_tissue_transcript_counts(transcript_data, biomart)
+    transcript_data = variance_filtering(transcript_data)
 
 
-        gene_data_scaled = standardize_dataframe(gene_data_matrix)
-        transcript_data_scaled = standardize_dataframe(transcript_data_matrix)
+    sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
+    gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
+
+    # Create expression matrices (samples × features)
+    gene_data_matrix = gene_data.set_index('gene_id')[sample_cols].T
+    transcript_data_matrix = transcript_data.set_index('transcript_id')[sample_cols].T
 
 
-        tf_genes_in_data = list(set(tf_list['Gene stable ID']) & set(gene_data_scaled.columns))
-        tf_transcripts_in_data = list(set(tf_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
-        regulator_transcripts_in_data = list(set(regulator_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
-
-        target_genes = list(gene_data_scaled.columns)
-        target_transcripts = list(transcript_data_scaled.columns)
+    gene_data_scaled = standardize_dataframe(gene_data_matrix)
+    transcript_data_scaled = standardize_dataframe(transcript_data_matrix)
 
 
+    tf_genes_in_data = list(set(tf_list['Gene stable ID']) & set(gene_data_scaled.columns))
+    tf_transcripts_in_data = list(set(tf_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
+    regulator_transcripts_in_data = list(set(regulator_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
 
-        transcript_data_scaled, gene_data_scaled, transcript_data_matrix = remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, transcript_data_matrix)
+    target_genes = list(gene_data_scaled.columns)
+    target_transcripts = list(transcript_data_scaled.columns)
 
-        runtime['n_transcripts'] = transcript_data.shape[0]
-        runtime['n_genes'] = gene_data.shape[0]
 
-        # Create hybrid data (TF transcripts + target genes)
-        hybrid_data = create_hybrid_data(
-            transcript_data_scaled,  
-            gene_data_scaled,        
-            tf_list
+
+    transcript_data_scaled, gene_data_scaled, transcript_data_matrix = remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, transcript_data_matrix)
+
+    runtime['n_transcripts'] = transcript_data.shape[0]
+    runtime['n_genes'] = gene_data.shape[0]
+
+    # Create hybrid data (TF transcripts + target genes)
+    hybrid_data = create_hybrid_data(
+        transcript_data_scaled,  
+        gene_data_scaled,        
+        tf_list
+    )
+
+
+    output_filepath_canonical = op.join(results_path_tissue, f"{CONDITION}_canonical_raw.tsv")
+    if not op.exists(output_filepath_canonical):
+        print(f"File not found. Running GRN inference for {CONDITION}...")
+        start = time.monotonic()
+        canonical_grn = inference(
+            gene_data=gene_data_scaled,
+            tf_list=tf_genes_in_data,
+            target_names='all',
+            n_runs=N_RUNS
         )
+        runtime['canonical'] = time.monotonic() - start
 
-
-        output_filepath_canonical = op.join(results_path_tissue, f"{CONDITION}_canonical_raw.tsv")
-        if not op.exists(output_filepath_canonical):
-            print(f"File not found. Running GRN inference for {CONDITION}...")
-            start = time.monotonic()
-            canonical_grn = inference(
-                gene_data=gene_data_scaled,
-                tf_list=tf_genes_in_data,
-                target_names='all',
-                n_runs=N_RUNS
-            )
-            runtime['canonical'] = time.monotonic() - start
-
-            canonical_grn = canonical_grn.rename(columns={'source': 'source_gene', 'target': 'target_gene'})
-            canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
-            canonical_grn.to_csv(output_filepath_canonical, sep='\t', index=False)
-            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
-
-
-        output_filepath_assource = op.join(results_path_tissue, f"{CONDITION}_as_aware_source_raw.tsv")
-        if not op.exists(output_filepath_canonical):
-            print(f"File not found. Running GRN inference for {CONDITION}...")
-            start = time.monotonic()
-            as_source_grn = inference(
-                gene_data=hybrid_data,
-                tf_list=tf_transcripts_in_data,
-                target_names=target_genes,
-                n_runs=N_RUNS
-            )
-            runtime['as_aware_source'] = time.monotonic() - start
-
-            as_source_grn = as_source_grn.rename(columns={'source': 'source_transcript', 'target': 'target_gene'})
-            as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
-            as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
-            as_source_grn.to_csv(output_filepath_assource, sep='\t', index=False)
-            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
-
-
-
-        output_filepath_as_complete = op.join(results_path_tissue, f"{CONDITION}_fully_as_aware_raw.tsv")
-        if not op.exists(output_filepath_canonical):
-            print(f"File not found. Running GRN inference for {CONDITION}...")
-            start = time.monotonic()
-            fully_as_grn = inference(
-                gene_data=transcript_data_scaled,
-                tf_list=regulator_transcripts_in_data,
-                target_names='all',
-                n_runs=N_RUNS
-            )
-            runtime['fully_as_aware'] = time.monotonic() - start
-
-            fully_as_grn = fully_as_grn.rename(columns={'source': 'source_transcript', 'target': 'target_transcript'})
-            fully_as_grn['source_gene'] = fully_as_grn['source_transcript'].map(tx2gene)
-            fully_as_grn['target_gene'] = fully_as_grn['target_transcript'].map(tx2gene)
-            fully_as_grn['reg_type'] = fully_as_grn['source_transcript'].map(tx_to_regtype)
-            fully_as_grn.to_csv(output_filepath_as_complete, sep='\t', index=False)
-            write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
-
-
-        runtime['total'] = runtime['canonical'] + runtime['as_aware_source'] + runtime['fully_as_aware']
-        
+        canonical_grn = canonical_grn.rename(columns={'source': 'source_gene', 'target': 'target_gene'})
+        canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
+        canonical_grn.to_csv(output_filepath_canonical, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
-        print(f"\nTotal inference time: {runtime['total']/60:.2f} minutes")
 
-    except:
-        print (f'Failure on tissue: {TISSUE}')
+
+    output_filepath_assource = op.join(results_path_tissue, f"{CONDITION}_as_aware_source_raw.tsv")
+    if not op.exists(output_filepath_canonical):
+        print(f"File not found. Running GRN inference for {CONDITION}...")
+        start = time.monotonic()
+        as_source_grn = inference(
+            gene_data=hybrid_data,
+            tf_list=tf_transcripts_in_data,
+            target_names=target_genes,
+            n_runs=N_RUNS
+        )
+        runtime['as_aware_source'] = time.monotonic() - start
+
+        as_source_grn = as_source_grn.rename(columns={'source': 'source_transcript', 'target': 'target_gene'})
+        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
+        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
+        as_source_grn.to_csv(output_filepath_assource, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+
+
+
+    output_filepath_as_complete = op.join(results_path_tissue, f"{CONDITION}_fully_as_aware_raw.tsv")
+    if not op.exists(output_filepath_canonical):
+        print(f"File not found. Running GRN inference for {CONDITION}...")
+        start = time.monotonic()
+        fully_as_grn = inference(
+            gene_data=transcript_data_scaled,
+            tf_list=regulator_transcripts_in_data,
+            target_names='all',
+            n_runs=N_RUNS
+        )
+        runtime['fully_as_aware'] = time.monotonic() - start
+
+        fully_as_grn = fully_as_grn.rename(columns={'source': 'source_transcript', 'target': 'target_transcript'})
+        fully_as_grn['source_gene'] = fully_as_grn['source_transcript'].map(tx2gene)
+        fully_as_grn['target_gene'] = fully_as_grn['target_transcript'].map(tx2gene)
+        fully_as_grn['reg_type'] = fully_as_grn['source_transcript'].map(tx_to_regtype)
+        fully_as_grn.to_csv(output_filepath_as_complete, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+
+
+    runtime['total'] = runtime['canonical'] + runtime['as_aware_source'] + runtime['fully_as_aware']
+    
+    write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+    print(f"\nTotal inference time: {runtime['total']/60:.2f} minutes")
+
 
 if __name__ == "__main__":
     main()
