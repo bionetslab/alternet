@@ -7,7 +7,10 @@ def create_hybrid_data(transcript_data, gene_data, tf_list, biomart_column='Tran
     return hybrid_data
     
 
-
+def create_hybrid_data(transcript_data, gene_data, tf_list, biomart_column='Transcript stable ID'):
+    hybrid_data = pd.concat([transcript_data.loc[:, transcript_data.columns.isin(tf_list['Transcript stable ID'])], gene_data], axis =1)
+    return hybrid_data
+    
 
 
 def standardize_dataframe(df):

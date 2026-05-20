@@ -113,7 +113,7 @@ def filter_set_b(set_b, gene_dominance, gene_n_isoforms,
     
     # Identify importance columns (v2 uses S2_mean/S3_mean_sum for ratios)
     s2_col = 'S2_mean'
-    s3_col = 'S3_mean_sum'
+    s3_col = 'S3_mean'
     
     # Compute ratio for reference (using mean importance for ratio)
     df['ratio_S3_S2'] = df[s3_col] / (df[s2_col] + eps)

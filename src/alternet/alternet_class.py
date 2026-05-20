@@ -17,7 +17,6 @@ class Alternet:
         'sample_cols', 
         'set_a', 
         'set_b', 
-        'set_b_unpacked',
         'set_c',
         'set_c_unpacked' ,
         'set_d',
@@ -68,10 +67,10 @@ class Alternet:
         self.set_a = self._compute_set_a()
         self.set_d_full = self._compute_set_d_full()
         self.set_d = self._compute_set_d()
-        self.set_b, self.set_b_unpacked = self._compute_set_b()
-        self.set_c, self.set_c_unpacked = self._compute_set_c()
+        self.set_b = self._compute_set_b()
+        self.set_c = self._compute_set_c()
 
-        ## Filtering (only adding the information)
+        # ## Filtering (only adding the information)
         self.gene_dominance, self.gene_n_isoforms, self.tx_expression_share = self._compute_dominance_metrics()
         self.set_a = self._filter_set_a()
         self.set_b = self._filter_set_b()
@@ -163,12 +162,11 @@ class Alternet:
         # Add the ones from set d which are tf edges
         tfsf_tf_like = self.set_d_full[self.set_d_full['tfsf_category'] == 'tfsf_tf_like'].copy()
         net_3_for_t2 = pd.concat([net3_tf_only, tfsf_tf_like])
-        set_b = as_source_vs_as_full(net2_for_t2, net_3_for_t2, self.tx2gene)
+        set_b = as_source_vs_as_full(net2_for_t2, net_3_for_t2)
+        print(set_b)
         set_b['reg_type'] = set_b['source_transcript'].map(self.tx_to_regtype)
-        set_b_unpacked = unpack_set_b(net_3_for_t2, set_b)
-        set_b = annotate_set_b(set_b,set_b_unpacked)
-        return set_b, set_b_unpacked
-
+        return set_b
+    
 
     def _compute_set_c(self):
         net3_tfsf = self.as_full[self.as_full['reg_type'] == 'TF_SF'].copy()
@@ -178,11 +176,8 @@ class Alternet:
         t_temps = self.transcript_data.drop(columns = {self.gene_col}).set_index(self.transcript_col)
         sf_edges = pd.concat([net3_sf, tfsf_sf_like])
         set_c = compute_set_c(sf_edges, t_temps, self.gene2tx, udf, self.reliability_df, self.sample_cols)
-        print(set_c)
         set_c['reg_type'] = set_c['source_transcript'].map(self.tx_to_regtype)
-        set_c_unpacked = unpack_set_c(net3_sf, set_c)
-        set_c = annotate_set_c(set_c, set_c_unpacked)
-        return set_c, set_c_unpacked
+        return set_c
 
 
     def _compute_dominance_metrics(self):
@@ -206,7 +201,5 @@ class Alternet:
         print(set_d_filtered)
         return set_d_filtered.copy()
     
-        
-    
-        
-        
+           
+ 
