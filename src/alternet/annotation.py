@@ -381,7 +381,9 @@ def build_transcript_annotation_table_for_unique_tfs(unique_tfs, annotation_data
     return annotation_df
 
 
-def annotate_isoform_exclusive_edges(grn, annotation_database, transcript_column = 'source_transcript'):
+
+
+def annotate_isoform_exclusive_edges(grn, annotation_database, transcript_column = 'source_transcript', suffixes = None):
     '''
     Merge transcript-level annotations into a gene regulatory network (GRN) based on source transcript IDs.
 
@@ -402,7 +404,11 @@ def annotate_isoform_exclusive_edges(grn, annotation_database, transcript_column
 
     unique_transcripts = grn[transcript_column].unique()
     annot_df = build_transcript_annotation_table_for_unique_tfs(unique_transcripts, annotation_database)
-    grn_annot = grn.merge(annot_df, how='left', left_on=transcript_column, right_index=True)
+    if suffixes is not None:
+        grn_annot = grn.merge(annot_df, how='left', left_on=transcript_column, right_index=True, suffixes =suffixes)
+    else:
+        grn_annot = grn.merge(annot_df, how='left', left_on=transcript_column, right_index=True)
+        
 
     return grn_annot
 

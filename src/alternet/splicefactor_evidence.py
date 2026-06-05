@@ -308,10 +308,8 @@ def compute_tfsf_evidence(reg_tx, target_tx, expr_df_indexed, usage_df_indexed,
         'sf_rho': np.nan, 'sf_pval': np.nan, 'delta_usage': np.nan,'qc_ok': False, 'n_samples': 0}
     
     if reg_tx not in expr_df_indexed.index or target_tx not in expr_df_indexed.index:
-        print('E')
         return result
     if target_tx not in usage_df_indexed.index:
-        print('A')
         return result
     
     reg_expr = np.array(expr_df_indexed.loc[reg_tx].values, dtype=np.float64)
@@ -326,7 +324,6 @@ def compute_tfsf_evidence(reg_tx, target_tx, expr_df_indexed, usage_df_indexed,
     
     valid = (target_reliable > 0) & np.isfinite(reg_expr) & np.isfinite(target_expr) & np.isfinite(target_usage)
     if valid.sum() < 20:
-        print('AAAA')
         return result
     
     result['n_samples'] = int(valid.sum())

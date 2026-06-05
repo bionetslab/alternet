@@ -1,0 +1,3 @@
+pixi run python src/alternet/infer_networks_magnet.py --data_path /data/bionets/og86asub/alternet-project/alternet/data/ --results_path  /data/bionets/og86asub/alternet-project/alternet/results-magnet --tissue DCM
+pixi run python src/alternet/infer_networks_magnet.py --data_path /data/bionets/og86asub/alternet-project/alternet/data/ --results_path  /data/bionets/og86asub/alternet-project/alternet/results-magnet --tissue NF
+pixi run python src/alternet/infer_networks_magnet.py --data_path /data/bionets/og86asub/alternet-project/alternet/data/ --results_path  /data/bionets/og86asub/alternet-project/alternet/results-magnet --tissue HCM

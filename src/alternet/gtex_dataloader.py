@@ -116,14 +116,14 @@ def clean_GTEX_tissue_transcript_counts(data, biomart, relevant_columns=['transc
     '''   
 
     
-    print('Cleaning up counts')
+    print('Cleaning up counts: Filtering transcript')
 
     for i in range(len(relevant_columns)):
         data = remove_version_id(data, transcript_column=relevant_columns[i])
 
     # filter for protein coding genes in biomart and select expression values of these in gex
     data = data[
-        data[relevant_columns[0]].isin(biomart[biomart['Gene type'] == 'protein_coding'][biomart_column].tolist())]
+        data[relevant_columns[0]].isin(biomart[biomart['Transcript type'] == 'protein_coding'][biomart_column].tolist())]
     
     threshold = data.shape[1] * 0.1
     mask = (data == 0).sum(axis=1) > threshold

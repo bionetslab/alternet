@@ -1,0 +1,186 @@
+
+import time
+from alternet.inference import inference
+from alternet.data_preprocessing import *
+from alternet.annotation import *
+import os.path as op
+import yaml
+import os
+from alternet.gtex_dataloader import *
+import pandas as pd
+
+
+import argparse
+import os
+import sys
+
+def write_dict_to_yaml(data, filepath):
+    """Write dictionary to YAML file."""
+    with open(filepath, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Process GTEx data for a specific tissue type."
+    )
+
+    parser.add_argument(
+        "--data_path", 
+        type=str, 
+        required=True, 
+        help="Path to the input data file."
+    )
+    parser.add_argument(
+        "--results_path", 
+        type=str, 
+        required=True, 
+        help="Path where the output results will be saved."
+    )
+    parser.add_argument(
+        "--tissue", 
+        type=str, 
+        required=True, 
+        help="The specific tissue type to analyze (e.g., 'Liver', 'Brain')."
+    )
+
+    # 3. Parse the arguments
+    args = parser.parse_args()
+
+    data_path = args.data_path
+    results_path = args.results_path
+    TISSUE = args.tissue
+    #gtex_data_dir = '/data/bionets/datasets/hackathon/data/GTEX'
+    #data_path = "/data/bionets/og86asub/alternet-project/alternet/data"
+    #results_path = "/data/bionets/og86asub/alternet-project/alternet/results-2.0.2"
+    
+    #data_path = "/data/bionets/og86asub/alternet-project/alternet/data/"
+
+    biomart_path = "biomart.txt"
+    tf_list_path = "allTFs_hg38.txt"
+    sf_list_path = "splicefactors.csv"
+
+    #pixi run python infer_networks_magnet.py --data_path "/data/bionets/og86asub/alternet-project/alternet/data/" --results_path  "/data/bionets/og86asub/alternet-project/alternet/results-magnet --tissue DCM
+
+
+
+    biomart = pd.read_csv(op.join(data_path, biomart_path), sep='\t')
+    tx2gene = dict(zip(biomart['Transcript stable ID'], biomart['Gene stable ID']))
+    gene2tx = biomart.groupby('Gene stable ID')['Transcript stable ID'].apply(set).to_dict()
+
+        # Load transcription factor list
+    tf_list_raw = pd.read_csv(op.join(data_path, tf_list_path), sep='\t', header=None)
+    tf_list = map_tf_ids(tf_list_raw, biomart)
+
+    # Load and map SF list
+    sf_list_raw = pd.read_csv(op.join(data_path, sf_list_path), header=0, sep = ',')
+    sf_list = map_sf_ids(sf_list_raw.loc[:, ['Splicing_Factor']], biomart)
+
+    # Combine TF and SF lists
+    regulator_list = combine_tf_sf_lists(tf_list, sf_list)
+    tx_to_regtype = dict(zip(regulator_list['Transcript stable ID'], regulator_list['Regulator_type']))
+    gene_to_regtype = regulator_list.groupby('Gene stable ID')['Regulator_type'].first().to_dict()
+    
+    
+    N_RUNS = 10
+    CONDITION = TISSUE
+    results_path_tissue = op.join(results_path, TISSUE)
+    os.makedirs(results_path_tissue, exist_ok=True)
+        
+    runtime_filepath = op.join(results_path_tissue, f"{CONDITION}_runtime.yaml")
+
+    # 2. Initialize or load the existing data
+    if op.exists(runtime_filepath):
+        with open(runtime_filepath, 'r') as f:
+            runtime = yaml.safe_load(f) or {}  # 'or {}' handles empty files safely
+    else:
+        runtime = {}
+
+
+    
+    magnet_path = op.join(data_path, f"{TISSUE}_magnet_prefiltered_tpm.tsv")
+    transcript_data = pd.read_csv(magnet_path, sep='\t')
+    
+
+    sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
+    gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
+
+    # Create expression matrices (samples × features)
+    gene_data_matrix = gene_data.set_index('gene_id')[sample_cols].T
+    transcript_data_matrix = transcript_data.set_index('transcript_id')[sample_cols].T
+
+
+    gene_data_scaled = standardize_dataframe(gene_data_matrix)
+    transcript_data_scaled = standardize_dataframe(transcript_data_matrix)
+
+
+    tf_genes_in_data = list(set(tf_list['Gene stable ID']) & set(gene_data_scaled.columns))
+    tf_transcripts_in_data = list(set(tf_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
+    regulator_transcripts_in_data = list(set(regulator_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
+    regulator_genes_in_data = list(set(regulator_list['Gene stable ID']) & set(gene_data_scaled.columns))
+
+
+    target_genes = list(gene_data_scaled.columns)
+    target_transcripts = list(transcript_data_scaled.columns)
+
+
+
+    transcript_data_scaled, gene_data_scaled, transcript_data_matrix = remove_problematic_transcripts(transcript_data_scaled, gene_data_scaled, transcript_data_matrix)
+
+    runtime['n_transcripts'] = transcript_data.shape[0]
+    runtime['n_genes'] = gene_data.shape[0]
+
+    # Create hybrid data (TF transcripts + target genes)
+    # hybrid_data = create_hybrid_data(
+    #     transcript_data_scaled,  
+    #     gene_data_scaled,        
+    #     [tf_list]
+    # )
+    
+    hybrid_data = pd.concat([transcript_data_scaled, gene_data_scaled], axis = 1)
+
+
+
+    output_filepath_canonical = op.join(results_path_tissue, f"{CONDITION}_source_genes.tsv")
+    if not op.exists(output_filepath_canonical):
+        print(f"File not found. Running GRN inference for {CONDITION}... using genes as regulators")
+        start = time.monotonic()
+        canonical_grn = inference(
+            gene_data=gene_data_scaled,
+            tf_list=regulator_genes_in_data,
+            target_names='all',
+            n_runs=N_RUNS
+        )
+        runtime['canonical'] = time.monotonic() - start
+
+        canonical_grn = canonical_grn.rename(columns={'source': 'source_gene'})
+        canonical_grn['source_type'] = 'gene'
+        canonical_grn['target_type'] = canonical_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
+        canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
+        canonical_grn.to_csv(output_filepath_canonical, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+
+
+    output_filepath_assource = op.join(results_path_tissue, f"{CONDITION}_source_transcripts.tsv")
+    if not op.exists(output_filepath_assource):
+        print(f"File not found. Running GRN inference for {CONDITION}... using transcripts as regulators")
+        start = time.monotonic()
+        as_source_grn = inference(
+            gene_data=hybrid_data,
+            tf_list=regulator_transcripts_in_data,
+            target_names='all',
+            n_runs=N_RUNS
+        )
+        runtime['as_aware_source'] = time.monotonic() - start
+
+        as_source_grn = as_source_grn.rename(columns={'source': 'source_transcript'})
+        as_source_grn['source_type'] = 'transcript'
+        as_source_grn['target_type'] = as_source_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
+        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
+        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
+        as_source_grn.to_csv(output_filepath_assource, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{CONDITION}_runtime.yaml"))
+
+
+if __name__ == "__main__":
+    main()
