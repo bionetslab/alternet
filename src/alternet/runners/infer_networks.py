@@ -73,9 +73,6 @@ def main():
     filename = args.filename
     TISSUE = args.experiment_name
     N_RUNS = 10
-    #gtex_data_dir = '/data/bionets/datasets/hackathon/data/GTEX'
-    #data_path = "/data/bionets/og86asub/alternet-project/alternet/data"
-    #results_path = "/data/bionets/og86asub/alternet-project/alternet/results-2.0.2"
 
 
     biomart_path = "biomart.txt"
