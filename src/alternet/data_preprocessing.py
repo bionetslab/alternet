@@ -8,10 +8,17 @@ def create_hybrid_data(transcript_data, gene_data, tf_list, biomart_column='Tran
     
 
 def create_hybrid_data(transcript_data, gene_data, tf_list, biomart_column='Transcript stable ID'):
-    hybrid_data = pd.concat([transcript_data.loc[:, transcript_data.columns.isin(tf_list['Transcript stable ID'])], gene_data], axis =1)
+    hybrid_data = pd.concat([transcript_data.loc[:, transcript_data.columns.isin(tf_list[biomart_column])], gene_data], axis =1)
     return hybrid_data
     
 
+def remove_low_expession_transcripts(data):
+    data =data.set_index(['transcript_id', 'gene_id'])
+    threshold = data.shape[1] * 0.1
+    mask = (data == 0).sum(axis=1) > threshold
+    data = data[~mask]
+    data = data.reset_index()
+    return data.copy()
 
 def standardize_dataframe(df):
     """

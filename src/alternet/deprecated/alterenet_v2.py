@@ -62,7 +62,6 @@ def alternet_main():
                 continue
             
             transcript_data = pd.read_csv(op.join(gtex_data_dir, f'{TISSUE}.tsv'), sep = '\t', index_col = 0)
-
             sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
 
             as_source_grn = pd.read_csv(op.join(results_path,  f"{TISSUE}_as_aware_source_raw.tsv"), sep='\t')

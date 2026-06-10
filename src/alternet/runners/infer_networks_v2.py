@@ -26,11 +26,12 @@ def main():
     )
 
     parser.add_argument(
-        "--transcript_data_dir", 
+        "--transcript_file", 
         type=str, 
         required=True, 
         help="Path to the directory containing GTEx raw data."
     )
+
     parser.add_argument(
         "--data_path", 
         type=str, 
@@ -49,12 +50,6 @@ def main():
         required=True, 
         help="The specific tissue type to analyze (e.g., 'Liver', 'Brain')."
     )
-    parser.add_argument(
-        "--filename", 
-        type=str, 
-        required=True, 
-        help="The specific tissue type to analyze (e.g., 'Liver', 'Brain')."
-    )
 
     parser.add_argument(
         "--n_runs", 
@@ -63,39 +58,59 @@ def main():
         default=10,
         help="Number of times to run GRNboost for"
     )
+    
+    parser.add_argument(
+        "--biomart_file", 
+        type=int, 
+        required=False, 
+        default=10,
+        help="Minimal required number of edge occurences"
+    )
+
+
+    parser.add_argument(
+        "--regulator_file", 
+        type=int, 
+        required=False, 
+        default=10,
+        help="Minimal required number of edge occurences"
+    )
+
+    parser.add_argument(
+        "--canonical", 
+        type=str, 
+        required=True, 
+        help="Path to the directory containing GTEx raw data."
+    )
+    
+    
+    parser.add_argument(
+        "--fully_as", 
+        type=str, 
+        required=True, 
+        help="Path to the directory containing GTEx raw data."
+    )
+
+
 
     # 3. Parse the arguments
     args = parser.parse_args()
 
-    data_path = args.data_path
-    transcript_data_dir = args.transcript_data_dir
     results_path = args.results_path
-    filename = args.filename
-    TISSUE = args.experiment_name
+    experiment_name = args.experiment_name
     N_RUNS = 10
 
 
-    biomart_path = "biomart.txt"
-    tf_list_path = "allTFs_hg38.txt"
-    sf_list_path = "splicefactors.csv"
-
-
-    biomart = pd.read_csv(op.join(data_path, biomart_path), sep='\t')
+    regulator_list  = pd.read_csv(args.regulator_file, sep = '\t')
+    biomart = pd.read_csv(args.biomart_file, sep='\t')
     tx2gene = dict(zip(biomart['Transcript stable ID'], biomart['Gene stable ID']))
 
-    tf_list_raw = pd.read_csv(op.join(data_path, tf_list_path), sep='\t', header=None)
-    tf_list = map_tf_ids(tf_list_raw, biomart)
-
-    sf_list_raw = pd.read_csv(op.join(data_path, sf_list_path), header=0, sep = ',')
-    sf_list = map_sf_ids(sf_list_raw.loc[:, ['Splicing_Factor']], biomart)
-
-    regulator_list = combine_tf_sf_lists(tf_list, sf_list)
     tx_to_regtype = dict(zip(regulator_list['Transcript stable ID'], regulator_list['Regulator_type']))
     gene_to_regtype = regulator_list.groupby('Gene stable ID')['Regulator_type'].first().to_dict()
     
 
 
-    runtime_filepath = op.join(results_path_tissue, f"{TISSUE}_runtime.yaml")
+    runtime_filepath = op.join(results_path_tissue, f"{experiment_name}_runtime.yaml")
 
     if op.exists(runtime_filepath):
         with open(runtime_filepath, 'r') as f:
@@ -104,65 +119,44 @@ def main():
         runtime = {}
 
 
-    results_path_tissue = op.join(results_path, TISSUE)
+    results_path_tissue = op.join(results_path, experiment_name)
     os.makedirs(results_path_tissue, exist_ok=True)
     
-    transcript_data = pd.read_csv(op.join(transcript_data_dir, filename), sep = '\t')
-
+    transcript_data = pd.read_csv(args.transcript_file, sep = '\t', index_col = 0)
     sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
+
+
     gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
 
     
-    # Create expression matrices (samples × features)
     gene_data_matrix = gene_data.set_index('gene_id')[sample_cols].T
     transcript_data_matrix = transcript_data.set_index('transcript_id')[sample_cols].T
-
 
     gene_data_scaled = standardize_dataframe(gene_data_matrix)
     transcript_data_scaled = standardize_dataframe(transcript_data_matrix)
 
-
-    regulator_transcripts_in_data = list(set(regulator_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
-    regulator_genes_in_data = list(set(regulator_list['Gene stable ID']) & set(gene_data_scaled.columns))
+    regulator_transcripts_all = list(set(regulator_list['Transcript stable ID']) & set(transcript_data_scaled.columns))
+    regulator_genes_all = list(set(regulator_list['Gene stable ID']) & set(transcript_data_scaled.columns))
 
 
     runtime['n_transcripts'] = transcript_data.shape[0]
     runtime['n_genes'] = gene_data.shape[0]
 
+
+    # GENE-all network
+    # Hybrid data = Transcription factor isoform counts, target gene counts
+    # Use target genes to get only iso-gene edges
+    # use TF transcripts as regulators
     # Create hybrid data (TF transcripts + target genes)
-    hybrid_data = create_hybrid_data(
-        transcript_data_scaled,  
-        gene_data_scaled,        
-        tf_list
-    )
+    hybrid_data = pd.concat([transcript_data, gene_data], axis =1)
 
-
-    output_filepath_canonical = op.join(results_path_tissue, f"{TISSUE}_source_genes.tsv")
-    if not op.exists(output_filepath_canonical):
-        print(f"File not found. Running GRN inference for {TISSUE}... using genes as regulators")
-        start = time.monotonic()
-        canonical_grn = inference(
-            gene_data=hybrid_data,
-            tf_list=regulator_genes_in_data,
-            target_names='all',
-            n_runs=N_RUNS
-        )
-        runtime['canonical'] = time.monotonic() - start
-
-        canonical_grn['source_type'] = 'gene'
-        canonical_grn['target_type'] = canonical_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
-        canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
-        canonical_grn.to_csv(output_filepath_canonical, sep='\t', index=False)
-        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{TISSUE}_runtime.yaml"))
-
-
-    output_filepath_assource = op.join(results_path_tissue, f"{TISSUE}_source_transcripts.tsv")
-    if not op.exists(output_filepath_assource):
-        print(f"File not found. Running GRN inference for {TISSUE}... using transcripts as regulators")
+    target_genes = list(gene_data.columns)
+    if not op.exists(args.as_source):
+        print(f"File not found. Running GRN inference for {experiment_name}... using transcripts as regulators")
         start = time.monotonic()
         as_source_grn = inference(
             gene_data=hybrid_data,
-            tf_list=regulator_transcripts_in_data,
+            tf_list=regulator_genes_all,
             target_names='all',
             n_runs=N_RUNS
         )
@@ -172,8 +166,30 @@ def main():
         as_source_grn['target_type'] = as_source_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
         as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
         as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
-        as_source_grn.to_csv(output_filepath_assource, sep='\t', index=False)
-        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{TISSUE}_runtime.yaml"))
+        as_source_grn.to_csv(args.as_source, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
+
+
+    #ISO-all-network
+    # Use transcript data 
+    # use tf and sf isoforms as regulators.
+    if not op.exists(args.fully_as):
+        print(f"File not found. Running GRN inference for {experiment_name}... using transcripts as regulators and targets")
+        start = time.monotonic()
+        as_source_grn = inference(
+            gene_data=hybrid_data,
+            tf_list=regulator_transcripts_all,
+            target_names='all',
+            n_runs=N_RUNS
+        )
+        runtime['as_aware_full'] = time.monotonic() - start
+
+        as_source_grn['source_type'] = 'transcript'
+        as_source_grn['target_type'] = as_source_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
+        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
+        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
+        as_source_grn.to_csv(args.as_source, sep='\t', index=False)
+        write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
 
 
 if __name__ == "__main__":

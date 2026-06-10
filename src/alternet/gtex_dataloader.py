@@ -1,5 +1,4 @@
 import pandas as pd
-from alternet.data_preprocessing import *
 
 class TissueNotFoundException(Exception):
     '''
@@ -130,42 +129,3 @@ def clean_GTEX_tissue_transcript_counts(data, biomart, relevant_columns=['transc
     data = data[~mask]
     
     return data
-
-def load_gtex_data(config, biomart, tf_list):
-    '''
-    Loads gene expression data and transcription factor list.
-
-    Parameters:
-        config (dict): Configuration dictionary containing paths to data files.
-
-    Returns:
-    
-        - transcript_tfs (pd.DataFrame): Transcription factor transcript expression data.
-        - gene_tfs (pd.DataFrame): Transcription factor gene expression data.
-        - targets (pd.DataFrame): Gene expression data of genes that are not transcription factors.
-
-    '''
-
-    # Retrieve tissue sample IDs
-    
-    tissue_ids = retrieve_GTEX_tissue_sampleids(config['sample_attributes'], tissue=config['tissue'])
-    
-
-    # load transcript data
-    transcript_data = read_GTEX_transcript_expression(config['transcript_data'], tissue_ids)
-    transcript_data = clean_GTEX_tissue_transcript_counts(transcript_data, biomart)
-
-
-    # load gene data
-    gene_ids = transcript_data['gene_id'].unique()
-    gene_data = read_GTEX_gene_expression(config['count_data'], tissue_ids, gene_ids, headers=['Name'])
-
-
-    gene_tfs, targets = separate_tf_genes(gene_data, tf_list, data_column='gene_id', biomart_column='Gene stable ID')
-
-
-    # separate transcription factors and genes
-    transcript_tfs, __ = separate_tf_genes(transcript_data, tf_list)
-
-
-    return transcript_tfs, gene_tfs, targets

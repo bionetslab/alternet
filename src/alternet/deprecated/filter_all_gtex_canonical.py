@@ -7,10 +7,8 @@ import os.path as op
 
 from alternet.gtex_dataloader import *
 
-from alternet import postprocessing
-from alternet.alternet_class import *
-from alternet.edge_categorization import *
-
+from alternet.postprocessing import filter_edges
+import yaml
 
 
 def write_dict_to_yaml(data, filepath):

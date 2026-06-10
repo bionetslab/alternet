@@ -234,10 +234,6 @@ def get_missing_items(transcript_items, related_df, column_name):
 
 
 
-
-
-
-
 def compare_values(transcript_data, related_transcripts):
     '''
     Compares 'Exon stable ID' and 'Pfam ID' from a transcript dictionary and a DataFrame

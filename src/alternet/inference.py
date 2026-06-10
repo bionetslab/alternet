@@ -3,7 +3,7 @@ import pandas as pd
 import os.path as op
 import os
 from distributed import Client, LocalCluster
-from signifikante.algo import grnboost2
+from signifikante.algo import signifikante_fdr, grnboost2
 from alternet.data_preprocessing import *
 from collections import defaultdict
 from tqdm import tqdm 
@@ -25,26 +25,75 @@ def compute_grn(gene_data, target_names, tf_list, client=None, use_tf=True, seed
         pd.DataFrame: Computed network containing regulatory interactions between genes and/or transcription factors.
     '''   
 
-    # compute the GRN
-    if not use_tf:
-        network = grnboost2(expression_data=gene_data, 
-                            client_or_address=client, 
-                            seed = seed)
+    if target_names == 'all':
+        if not use_tf:
+            network = signifikante_fdr(
+                expression_data=gene_data,
+                normalize_gene_expression=False,
+                cluster_representative_mode="random",
+                num_target_clusters=100,
+                inference_mode="grnboost2",
+                apply_bh_correction=True,
+                apply_westfall_young = True,
+                client = client,
+                seed = seed)
+            
+        else:
+            network = signifikante_fdr(
+                expression_data=expression_df,
+                tf_list = tf_list,
+                normalize_gene_expression=False,
+                cluster_representative_mode="random",
+                num_target_clusters=100,
+                inference_mode="grnboost2",
+                apply_bh_correction=True,
+                apply_westfall_young = True,
+                client = client,
+                seed = seed)
     else:
-        network = grnboost2(expression_data=gene_data,
+
+        if not use_tf:
+            network_1 = grnboost2(expression_data=gene_data, 
+                            client_or_address=client)
+            
+            network = signifikante_fdr(
+                expression_data=gene_data,
+                input_grn =network_1,
+                normalize_gene_expression=False,
+                cluster_representative_mode="random",
+                num_target_clusters=100,
+                inference_mode="grnboost2",
+                apply_bh_correction=True,
+                apply_westfall_young = True,
+                client = client,
+                seed = seed)
+        
+        else:
+            network_1 = grnboost2(expression_data=gene_data,
                             target_names=target_names,
                             tf_names=tf_list,
-                            client_or_address=client,
-                            seed = seed)
-
-    # write the GRN to file
+                            client_or_address=client)
+            
+            network = signifikante_fdr(
+                expression_data=gene_data,
+                tf_list = tf_list,
+                input_grn =network_1,
+                normalize_gene_expression=False,
+                cluster_representative_mode="random",
+                num_target_clusters=100,
+                inference_mode="grnboost2",
+                apply_bh_correction=True,
+                apply_westfall_young = True,
+                client = client,
+                seed = seed)
+        
     network.columns = ['source', 'target', 'importance']
     return network
 
 
 
 
-def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = True):
+def inference(gene_data,  tf_list, target_names='all', set_seed = True):
     '''
     Performs inference to create gene regulatory networks (GRNs) for transcript-level and gene-level data.
     Optionally aggregates the results from multiple runs.
@@ -65,25 +114,20 @@ def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = T
 
     client = Client(LocalCluster())
 
-    
-    grns = []
-    for i in tqdm(range(n_runs)):
-        if set_seed:
-            seed = i
-        else:
-            seed = None
-        grn = compute_grn(gene_data=gene_data,
-                            target_names = target_names,
-                            tf_list = tf_list,
-                            client=client,
-                            use_tf=True,
-                            seed = seed)
-        grns.append(grn)
+    if set_seed:
+        seed = 11
+    else:
+        seed = None
+        
+    grn = compute_grn(gene_data=gene_data,
+                        target_names = target_names,
+                        tf_list = tf_list,
+                        client=client,
+                        use_tf=True,
+                        seed = seed)
+
     
     client.close()
-
-    grn = aggregate_results(grns)
-
     return grn
 
 
