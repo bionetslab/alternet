@@ -3,7 +3,7 @@ import pandas as pd
 
 
 
-def filter_edges(df, min_frequency=10, importance_percentile=0.7,freq_col='frequency', imp_col='median_importance'):
+def filter_edges(df, max_p_value=0.05, importance_percentile=0.7,freq_col='pvalue_westfall_young', imp_col='importance'):
     """
     Filter edges by frequency and importance (AlterNet 1.0 style).
     Uses MEDIAN importance for filtering (more robust to outliers).
@@ -11,7 +11,7 @@ def filter_edges(df, min_frequency=10, importance_percentile=0.7,freq_col='frequ
     n_before = len(df)
     
     # Frequency filter first
-    freq_mask = df[freq_col] >= min_frequency
+    freq_mask = df[freq_col] < max_p_value
     df_filtered = df[freq_mask].copy()
     n_after_freq = len(df_filtered)
     
@@ -40,7 +40,8 @@ def plausibility_filtering(df,gene_dominance, r_dom = 0.9):
 
 
 
-def canonical_names(df, tx2gene, gene2tx):
+def canonical_names(df, tx2gene, gene2regtype):
+    df = df.rename(columns = {'TF': 'source'})
 
     df["source_type"] = np.where(df["source"].str.startswith("ENSG"), "gene", "transcript")
 
@@ -52,8 +53,10 @@ def canonical_names(df, tx2gene, gene2tx):
 
     df["source_transcript"] = np.where(df["source_type"] == "transcript", df["source"], np.nan )
     
-    
     df["target_transcript"] = np.where(df["target_type"] == "transcript", df["target"], np.nan)
+    
+    df["reg_type"] = df['source'].map(gene2regtype)
+
 
     return df
 
@@ -62,15 +65,15 @@ def get_best_variable(df, r_iso=0.66,r_eq=0.8, r_iso_strict=0.5, eps=1e-6):
     df['edge_gg'] = df['source_gene'] + '_' + df['target_gene']
     df['edge_type'] = df['source_type'] + '-' + df['target_type']
 
-    # 1. Find the maximum 'mean_importance' per group and map it to all elements
-    df['max_mean_importance'] = df.groupby('edge_gg')['mean_importance'].transform('max')
+    # 1. Find the maximum 'importance' per group and map it to all elements
+    df['max_importance'] = df.groupby('edge_gg')['importance'].transform('max')
     
     df["is_unique_edge"] = df.groupby("edge_gg")["edge_gg"].transform("count") == 1
 
     # 2. Compute the ratio of each element's importance to its group's maximum
-    df['importance_ratio'] = df['mean_importance'] / df['max_mean_importance'] + eps
+    df['importance_ratio'] = df['importance'] / df['max_importance'] + eps
 
-    is_max = df['mean_importance'] == df['max_mean_importance']
+    is_max = df['importance'] == df['max_importance']
 
     df['max_other_ratio'] = (df['importance_ratio'].where(~is_max)
     .groupby(df['edge_gg'])
@@ -100,5 +103,5 @@ def get_best_variable(df, r_iso=0.66,r_eq=0.8, r_iso_strict=0.5, eps=1e-6):
         .transform('nunique')
     )
     # Clean up helper columns
-    df = df.drop(columns=['max_mean_importance', 'max_other_ratio'])
+    df = df.drop(columns=['max_importance', 'max_other_ratio'])
     return df

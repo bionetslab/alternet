@@ -32,12 +32,7 @@ def main():
         help="Path to the directory containing GTEx raw data."
     )
 
-    parser.add_argument(
-        "--data_path", 
-        type=str, 
-        required=True, 
-        help="Path to the input data file."
-    )
+
     parser.add_argument(
         "--results_path", 
         type=str, 
@@ -61,7 +56,7 @@ def main():
     
     parser.add_argument(
         "--biomart_file", 
-        type=int, 
+        type=str, 
         required=False, 
         default=10,
         help="Minimal required number of edge occurences"
@@ -70,7 +65,7 @@ def main():
 
     parser.add_argument(
         "--regulator_file", 
-        type=int, 
+        type=str, 
         required=False, 
         default=10,
         help="Minimal required number of edge occurences"
@@ -116,6 +111,10 @@ def main():
     
 
 
+
+    results_path_tissue = op.join(results_path, experiment_name)
+    os.makedirs(results_path_tissue, exist_ok=True)
+
     runtime_filepath = op.join(results_path_tissue, f"{experiment_name}_runtime.yaml")
 
     if op.exists(runtime_filepath):
@@ -124,14 +123,13 @@ def main():
     else:
         runtime = {}
 
-
-    results_path_tissue = op.join(results_path, experiment_name)
-    os.makedirs(results_path_tissue, exist_ok=True)
     
     transcript_data = pd.read_csv(args.transcript_file, sep = '\t', index_col = 0)
     sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
 
-
+    #TEst run
+    print("Test run")
+    transcript_data = transcript_data.iloc[0:500:, :].copy()
     gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
 
     
@@ -151,7 +149,7 @@ def main():
 
 
 
-    
+    print(regulator_transcripts_tf)
     # GENE-GENE network 
     # standard GRNboost2 run. Regulators = TFs, gene counts
     if not op.exists(args.canonical):
@@ -160,14 +158,9 @@ def main():
         canonical_grn = inference(
             gene_data=gene_data_scaled,
             tf_list=regulator_genes_in_data,
-            target_names='all',
-            n_runs=N_RUNS
+            target_names='all'
         )
         runtime['canonical'] = time.monotonic() - start
-
-        canonical_grn['source_type'] = 'gene'
-        canonical_grn['target_type'] = canonical_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
-        canonical_grn['reg_type'] = canonical_grn['source_gene'].map(gene_to_regtype)
         canonical_grn.to_csv(args.canonical, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
 
@@ -183,23 +176,18 @@ def main():
         gene_data_scaled,        
         tf_list = tf_list
     )
-    target_genes = list(gene_data.columns)
-    if not op.exists(args.as_source):
+    target_genes = list(gene_data_scaled.columns)
+    print(target_genes)
+    if not op.exists(args.source_as):
         print(f"File not found. Running GRN inference for {experiment_name}... using transcripts as regulators")
         start = time.monotonic()
         as_source_grn = inference(
             gene_data=hybrid_data,
             tf_list=regulator_transcripts_tf,
-            target_names=target_genes,
-            n_runs=N_RUNS
+            target_names=target_genes
         )
         runtime['as_aware_source'] = time.monotonic() - start
-
-        as_source_grn['source_type'] = 'transcript'
-        as_source_grn['target_type'] = as_source_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
-        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
-        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
-        as_source_grn.to_csv(args.as_source, sep='\t', index=False)
+        as_source_grn.to_csv(args.source_as, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
 
 
@@ -212,16 +200,11 @@ def main():
         as_source_grn = inference(
             gene_data=transcript_data_scaled,
             tf_list=regulator_transcripts_all,
-            target_names='all',
-            n_runs=N_RUNS
+            target_names='all'
         )
         runtime['as_aware_full'] = time.monotonic() - start
 
-        as_source_grn['source_type'] = 'transcript'
-        as_source_grn['target_type'] = as_source_grn['target'].apply(lambda x: 'gene' if str(x).startswith('ENSG') else 'transcript')
-        as_source_grn['source_gene'] = as_source_grn['source_transcript'].map(tx2gene)
-        as_source_grn['reg_type'] = as_source_grn['source_transcript'].map(tx_to_regtype)
-        as_source_grn.to_csv(args.as_source, sep='\t', index=False)
+        as_source_grn.to_csv(args.fully_as, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
 
 

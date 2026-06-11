@@ -68,30 +68,37 @@ def main():
     )
 
     parser.add_argument(
-        "--min_support", 
-        type=int, 
+        "--p_value", 
+        type=float, 
         required=False, 
-        default=10,
+        default=1,
         help="Minimal required number of edge occurences"
     )
 
     parser.add_argument(
         "--biomart_file", 
-        type=int, 
-        required=False, 
-        default=10,
+        type=str, 
         help="Minimal required number of edge occurences"
     )
 
 
     parser.add_argument(
         "--regulator_file", 
-        type=int, 
-        required=False, 
-        default=10,
+        type=str, 
         help="Minimal required number of edge occurences"
     )
 
+    parser.add_argument(
+        "--appris", 
+        type=str, 
+        help="Minimal required number of edge occurences"
+    )
+
+    parser.add_argument(
+        "--digger", 
+        type=str, 
+        help="Minimal required number of edge occurences"
+    )
 
 
 
@@ -101,7 +108,7 @@ def main():
     results_path = args.results_path
     experiment_name = args.experiment_name
     
-    edge_support = args.min_support
+    p_value = args.p_value
 
     os.makedirs(results_path, exist_ok = True)
 
@@ -109,26 +116,33 @@ def main():
     biomart = pd.read_csv(args.biomart_file, sep='\t')
     tx2gene = dict(zip(biomart['Transcript stable ID'], biomart['Gene stable ID']))
     gene2tx = biomart.groupby('Gene stable ID')['Transcript stable ID'].apply(set).to_dict()
+    gene2regtype = dict(zip(regulator_list['Transcript stable ID'], regulator_list['Regulator_type'])) | dict(zip(regulator_list['Gene stable ID'], regulator_list['Regulator_type']))
 
+   
+    appris_df = pd.read_csv(args.appris, sep='\t')
+    digger_df = pd.read_csv(args.digger, low_memory=False)
+
+    tf_database = create_transcipt_annotation_database(
+        tf_list=regulator_list, appris_df=appris_df, digger=digger_df
+    )
 
     transcript_data = pd.read_csv(args.transcript_file, sep = '\t', index_col = 0)
     sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
 
 
 
-
     as_source_grn = pd.read_csv(args.source_as, sep='\t')
     as_source_grn = canonical_names(as_source_grn, tx2gene, gene2tx)
-    as_source_grn = filter_edges(as_source_grn, min_frequency=edge_support)
+    as_source_grn = filter_edges(as_source_grn, max_p_value=p_value)
 
     fully_as_aware = pd.read_csv(args.fully_as, sep='\t')
     fully_as_aware = canonical_names(fully_as_aware, tx2gene, gene2tx)
-    fully_as_aware = filter_edges(fully_as_aware, min_frequency=edge_support)
+    fully_as_aware = filter_edges(fully_as_aware,  max_p_value=p_value)
 
 
     canonical_grn = pd.read_csv(args.canonical, sep='\t')
     canonical_grn = canonical_names(canonical_grn, tx2gene, gene2tx)
-    canonical_grn = filter_edges(canonical_grn, min_frequency=edge_support)
+    canonical_grn = filter_edges(canonical_grn, max_p_value=p_value)
 
 
 
@@ -144,36 +158,56 @@ def main():
     transcript_data_temp = transcript_data.set_index('transcript_id')[sample_cols]
     usage_df = usage_df.set_index('transcript_id')[sample_cols]
 
+    # Source == TF net
     tf_net = networks[(networks.reg_type == 'TF')].copy()
+
+    # source == SF net
+    sf_candidates = networks[(networks.reg_type == 'SF') & (networks.target_type=='transcript') & (networks.source_type=='transcript')]
+    if sf_candidates.shape[0]>0:
+        sf_net = compute_set_c(sf_candidates, transcript_data, gene2tx, usage_df, reliability_df, sample_cols, epsilon=1e-6, n_cores=16)
+    else:
+        sf_net = None
+
+
     # Decide if TF_SF is splice factor or transcription factor
-    nn = tf_sf_disambigouation_fully_as_aware(networks[(networks.reg_type == 'TF_SF') & (networks.target_type=='transcript')], regulator_list, transcript_data_temp, usage_df, reliability_df,
-                                            RHO_MIN = 0.3,  Q_MIN = 0.05, DU_MIN = 0.1, n_cores = 16)
+    if networks[(networks.reg_type == 'TF_SF')].shape[0]>0:
+        nn = tf_sf_disambigouation_fully_as_aware(networks[(networks.reg_type == 'TF_SF') & (networks.target_type=='transcript')], regulator_list, transcript_data_temp, usage_df, reliability_df,
+                                                RHO_MIN = 0.3,  Q_MIN = 0.05, DU_MIN = 0.1, n_cores = 16)
+
+        ab = compute_set_c(nn[nn.tfsf_category == 'tfsf_sf_like'], transcript_data, gene2tx, usage_df, reliability_df, sample_cols, epsilon=1e-6, n_cores=16)
+        if sf_net is not None and ab.shape[0]>0:
+            sf_net = pd.concat([ab, sf_net])
 
 
-    ab = compute_set_c(nn[nn.tfsf_category == 'tfsf_sf_like'], transcript_data, gene2tx, usage_df, reliability_df, sample_cols, epsilon=1e-6, n_cores=16)
-    ac = compute_set_c(networks[(networks.reg_type == 'SF') & (networks.target_type=='transcript') & (networks.source_type=='transcript')], transcript_data, gene2tx, usage_df, reliability_df, sample_cols, epsilon=1e-6, n_cores=16)
-    sf_net = pd.concat([ab, ac])
+        # Concatenate TF like regulators if there are any
+        ad = nn[nn.tfsf_category == 'tfsf_tf_like']
+        tf_net = pd.concat([ad, tf_net])
+
+        # the rest
+        ambi_net = nn[nn.tfsf_category.isin(['tfsf_joint', 'tfsf_ambiguous'])]
+    else:
+        ambi_net = None
 
 
-    # Concatenate TF like regulators
-    ad = nn[nn.tfsf_category == 'tfsf_tf_like']
-    tf_net = pd.concat([ad, tf_net])
-    ambi_net = nn[nn.tfsf_category.isin(['tfsf_joint', 'tfsf_ambiguous'])]
+
+    if tf_net.shape[0]>0:
+        tf_net = annotate_isoform_exclusive_edges(tf_net, tf_database, transcript_column='source_transcript')
+        tf_net = annotate_isoform_exclusive_edges(tf_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
+        tf_net.to_csv(op.join(results_path, f'{experiment_name}.tf.tsv'), sep='\t')
+
+    if (ambi_net is not None) and (ambi_net.shape[0]>0):
+        ambi_net = annotate_isoform_exclusive_edges(ambi_net, tf_database, transcript_column='source_transcript')
+        ambi_net = annotate_isoform_exclusive_edges(ambi_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
+        ambi_net.to_csv(op.join(results_path, f'{experiment_name}.ambi.tsv'), sep='\t')
+
+    if (sf_net is not None) and sf_net.shape[0]>0:
+        sf_net = annotate_isoform_exclusive_edges(sf_net, tf_database, transcript_column='source_transcript')
+        sf_net = annotate_isoform_exclusive_edges(sf_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
+        sf_net.to_csv(op.join(results_path, f'{experiment_name}.sf.tsv'), sep='\t')
 
 
-    # Annotate source_transcript
-    ambi_net = annotate_isoform_exclusive_edges(ambi_net, tf_database, transcript_column='source_transcript')
-    # Annotate target transcript
-    ambi_net = annotate_isoform_exclusive_edges(ambi_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
-    
-    sf_net = annotate_isoform_exclusive_edges(sf_net, tf_database, transcript_column='source_transcript')
-    sf_net = annotate_isoform_exclusive_edges(sf_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
-
-    tf_net = annotate_isoform_exclusive_edges(tf_net, tf_database, transcript_column='source_transcript')
-    tf_net = annotate_isoform_exclusive_edges(tf_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
 
 
-    sf_net.to_csv(op.join(results_path, f'{experiment_name}.sf.tsv'), sep='\t')
-    ambi_net.to_csv(op.join(results_path, f'{experiment_name}.ambi.tsv'), sep='\t')
-    tf_net.to_csv(op.join(results_path, f'{experiment_name}.tf.tsv'), sep='\t')
 
+if __name__ == "__main__":
+    main()

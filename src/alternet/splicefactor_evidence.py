@@ -103,12 +103,11 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
 
     # Aggregate SF edges to (SF_tx, target_gene) level
     sf_edges = net3_sf.groupby(['source_transcript', 'source_gene', 'target_gene']).agg({
-        'mean_importance': ['sum', 'max', 'count'],
-        'median_importance': ['sum', 'max'],
+        'importance': ['sum', 'max', 'count'],
         'target_transcript': lambda x: set(x)
     }).reset_index()
-    sf_edges.columns = ['source_transcript', 'source_gene', 'target_gene','mean_importance_sum', 'mean_importance_max', 
-                        'n_target_tx', 'median_importance_sum', 'median_importance_max', 'target_tx_set']
+    sf_edges.columns = ['source_transcript', 'source_gene', 'target_gene','importance_sum', 'importance_max', 
+                        'n_target_tx', 'target_tx_set']
 
     sf_transcripts = sf_edges['source_transcript'].unique()
     transcript_temp = transcript_data.reset_index()
@@ -179,7 +178,7 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
         set_c = set_c.rename(columns = {'delta_usage_y': 'delta_usage'})
 
     # # Sort by median importance (AlterNet 1.0 style)
-    set_c = set_c.sort_values('mean_importance', ascending=False)
+    set_c = set_c.sort_values('importance', ascending=False)
 
     # print(f"\nFinal Set C: {len(set_c):,} rows")
 
@@ -286,13 +285,13 @@ def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_d
         set_d_full['tfsf_category'] = set_d_full.apply(categorize_tfsf, axis=1)
         
         # Sort by median importance
-        set_d_full = set_d_full.sort_values('median_importance', ascending=False)
+        set_d_full = set_d_full.sort_values('importance', ascending=False)
         
     else:
         print('Warning falling back to classifying everything ambigouus')
         set_d_full = net3_tfsf[['source_transcript', 'source_gene', 'target_transcript', 'target_gene', 
-                                'mean_importance', 'median_importance']].copy()
-        set_d_full.columns = ['source_transcript', 'source_gene', 'target_transcript', 'target_gene', 'mean_importance', 'median_importance']
+                                'importance']].copy()
+        set_d_full.columns = ['source_transcript', 'source_gene', 'target_transcript', 'target_gene', 'importance']
         set_d_full['tfsf_category'] = 'tfsf_ambiguous'
 
     
