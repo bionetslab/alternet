@@ -47,28 +47,14 @@ def compute_grn(gene_data, target_names, tf_list, client=None, seed = None, num_
         
         network_chunks.append(chunk_network)
 
-    network_1 = pd.concat(network_chunks, ignore_index=True)
+    network = pd.concat(network_chunks, ignore_index=True)
     
-    network = signifikante_fdr(
-        expression_data=gene_data,
-        tf_names = tf_list,
-        input_grn =network_1,
-        normalize_gene_expression=False,
-        cluster_representative_mode="random",
-        num_target_clusters=num_target_cluster,
-        num_permutations = num_permutations,
-        inference_mode="grnboost2",
-        apply_bh_correction=True,
-        apply_westfall_young = True,
-        client_or_address = client,
-        seed = seed)
-
     return network
 
 
 
 
-def inference(gene_data,  tf_list, target_names='all', set_seed = True):
+def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = True):
     '''
     Performs inference to create gene regulatory networks (GRNs) for transcript-level and gene-level data.
     Optionally aggregates the results from multiple runs.
@@ -88,14 +74,22 @@ def inference(gene_data,  tf_list, target_names='all', set_seed = True):
 
 
 
+    
     client = Client(LocalCluster())
-    grn = compute_grn(gene_data=gene_data,
-                        target_names = target_names,
-                        tf_list = tf_list,
-                        client=client,
-                        use_tf=True)
+
+    
+    grns = []
+    for i in tqdm(range(n_runs)):
+        grn = compute_grn(gene_data=gene_data,
+                            target_names = target_names,
+                            tf_list = tf_list,
+                            client=client)
+        grns.append(grn)
     
     client.close()
+
+    grn = aggregate_results(grns)
+
     return grn
 
 
