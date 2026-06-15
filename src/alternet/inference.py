@@ -48,6 +48,8 @@ def compute_grn(gene_data, target_names, tf_list, client=None, seed = None, num_
         network_chunks.append(chunk_network)
 
     network = pd.concat(network_chunks, ignore_index=True)
+
+    network.columns = ['source', 'target', 'importance']
     
     return network
 
