@@ -127,9 +127,6 @@ def main():
     transcript_data = pd.read_csv(args.transcript_file, sep = '\t', index_col = 0)
     sample_cols = [c for c in transcript_data.columns if c not in ['transcript_id', 'gene_id']]
 
-    #TEst run
-    print("Test run")
-    transcript_data = transcript_data.iloc[0:500:, :].copy()
     gene_data = transcript_data.groupby('gene_id')[sample_cols].sum().reset_index()
 
     
