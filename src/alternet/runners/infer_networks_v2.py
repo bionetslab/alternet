@@ -152,7 +152,8 @@ def main():
         as_source_grn = inference(
             gene_data=hybrid_data,
             tf_list=regulator_genes_all,
-            target_names='all'
+            target_names='all',
+            save_dir = results_path_tissue
             )
         runtime['as_aware_source'] = time.monotonic() - start
         as_source_grn.to_csv(args.canonical, sep='\t', index=False)
@@ -168,7 +169,9 @@ def main():
         as_source_grn = inference(
             gene_data=hybrid_data,
             tf_list=regulator_transcripts_all,
-            target_names='all'
+            target_names='all',
+            save_dir = results_path_tissue
+
             )
         runtime['as_aware_full'] = time.monotonic() - start
         as_source_grn.to_csv(args.fully_as, sep='\t', index=False)
