@@ -132,19 +132,20 @@ def main():
 
 
     as_source_grn = pd.read_csv(args.source_as, sep='\t')
+    print(as_source_grn)
     as_source_grn = canonical_names(as_source_grn, tx2gene, gene2tx)
-    as_source_grn = filter_edges(as_source_grn, max_p_value=p_value)
+    as_source_grn = filter_edges(as_source_grn, frequency=10, imp_col = 'median_importance')
 
     fully_as_aware = pd.read_csv(args.fully_as, sep='\t')
     fully_as_aware = canonical_names(fully_as_aware, tx2gene, gene2tx)
-    fully_as_aware = filter_edges(fully_as_aware,  max_p_value=p_value)
+    fully_as_aware = filter_edges(fully_as_aware,  frequency=10, imp_col = 'median_importance')
 
 
     canonical_grn = pd.read_csv(args.canonical, sep='\t')
     canonical_grn = canonical_names(canonical_grn, tx2gene, gene2tx)
-    canonical_grn = filter_edges(canonical_grn, max_p_value=p_value)
+    canonical_grn = filter_edges(canonical_grn, frequency=10, imp_col = 'median_importance')
 
-
+    print(canonical_grn)
 
     networks = pd.concat([canonical_grn, as_source_grn, fully_as_aware])
     networks = get_best_variable(networks)
@@ -153,6 +154,7 @@ def main():
 
     gene_dominance, gene_n_isoforms, tx_expression_share  = compute_dominance_metrics(transcript_data, sample_cols)
     networks = plausibility_filtering(networks, gene_dominance, r_dom = 0.9)
+    print(networks)
 
     usage_df, reliability_df = calculate_transcript_usage(transcript_data)
     transcript_data_temp = transcript_data.set_index('transcript_id')[sample_cols]
@@ -167,6 +169,8 @@ def main():
         sf_net = compute_set_c(sf_candidates, transcript_data, gene2tx, usage_df, reliability_df, sample_cols, epsilon=1e-6, n_cores=16)
     else:
         sf_net = None
+
+    print(sf_net)
 
 
     # Decide if TF_SF is splice factor or transcription factor
@@ -205,6 +209,7 @@ def main():
         sf_net = annotate_isoform_exclusive_edges(sf_net, tf_database, transcript_column='target_transcript', suffixes = ('_source', '_target'))
         sf_net.to_csv(op.join(results_path, f'{experiment_name}.sf.tsv'), sep='\t')
 
+    print(op.join(results_path, f'{experiment_name}.sf.tsv'))
 
 
 

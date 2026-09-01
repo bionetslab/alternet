@@ -3,7 +3,26 @@ import pandas as pd
 
 
 
-def filter_edges(df, max_p_value=0.05, importance_percentile=0.7,freq_col='pvalue_westfall_young', imp_col='importance'):
+def filter_edges(df, frequency=10, importance_percentile=0.7,freq_col='frequency', imp_col='importance'):
+    """
+    Filter edges by frequency and importance (AlterNet 1.0 style).
+    Uses MEDIAN importance for filtering (more robust to outliers).
+    """
+    n_before = len(df)
+    
+    # Frequency filter first
+    freq_mask = df[freq_col] >=frequency
+    df_filtered = df[freq_mask].copy()
+    n_after_freq = len(df_filtered)
+    
+    # Importance filter (top percentile) - using median_importance
+    importance_threshold = df_filtered[imp_col].quantile(importance_percentile)
+    df_filtered = df_filtered[df_filtered[imp_col] >= importance_threshold].copy()
+    n_after_imp = len(df_filtered)
+
+    return df_filtered
+
+def filter_edges_pvalue(df, max_p_value=0.05, importance_percentile=0.7,freq_col='pvalue_westfall_young', imp_col='importance'):
     """
     Filter edges by frequency and importance (AlterNet 1.0 style).
     Uses MEDIAN importance for filtering (more robust to outliers).
@@ -61,19 +80,19 @@ def canonical_names(df, tx2gene, gene2regtype):
     return df
 
 
-def get_best_variable(df, r_iso=0.66,r_eq=0.8, r_iso_strict=0.5, eps=1e-6):
+def get_best_variable(df, importance_column = 'median_importance', r_iso=0.66,r_eq=0.8, r_iso_strict=0.5, eps=1e-6):
     df['edge_gg'] = df['source_gene'] + '_' + df['target_gene']
     df['edge_type'] = df['source_type'] + '-' + df['target_type']
 
     # 1. Find the maximum 'importance' per group and map it to all elements
-    df['max_importance'] = df.groupby('edge_gg')['importance'].transform('max')
+    df['max_importance'] = df.groupby('edge_gg')[importance_column].transform('max')
     
     df["is_unique_edge"] = df.groupby("edge_gg")["edge_gg"].transform("count") == 1
 
     # 2. Compute the ratio of each element's importance to its group's maximum
-    df['importance_ratio'] = df['importance'] / df['max_importance'] + eps
+    df['importance_ratio'] = df[importance_column] / df['max_importance'] + eps
 
-    is_max = df['importance'] == df['max_importance']
+    is_max = df[importance_column] == df['max_importance']
 
     df['max_other_ratio'] = (df['importance_ratio'].where(~is_max)
     .groupby(df['edge_gg'])

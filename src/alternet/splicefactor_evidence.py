@@ -98,12 +98,12 @@ def compute_sf_splicing_evidence(sf_tx, target_gene, target_tx_set, sf_vals, gen
     return correlations
 
 
-def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_indexed, reliability_df_indexed, sample_cols, epsilon=1e-6, n_cores=16):
+def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_indexed, reliability_df_indexed, sample_cols, filter_col = 'median_importance', epsilon=1e-6, n_cores=16):
     # Set C and Set D: PSI/Usage thresholds
 
     # Aggregate SF edges to (SF_tx, target_gene) level
     sf_edges = net3_sf.groupby(['source_transcript', 'source_gene', 'target_gene']).agg({
-        'importance': ['sum', 'max', 'count'],
+        filter_col: ['sum', 'max', 'count'],
         'target_transcript': lambda x: set(x)
     }).reset_index()
     sf_edges.columns = ['source_transcript', 'source_gene', 'target_gene','importance_sum', 'importance_max', 
@@ -178,7 +178,7 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
         set_c = set_c.rename(columns = {'delta_usage_y': 'delta_usage'})
 
     # # Sort by median importance (AlterNet 1.0 style)
-    set_c = set_c.sort_values('importance', ascending=False)
+    set_c = set_c.sort_values(filter_col, ascending=False)
 
     # print(f"\nFinal Set C: {len(set_c):,} rows")
 
@@ -192,7 +192,7 @@ def compute_set_c(net3_sf, transcript_data, gene_to_all_transcripts, usage_df_in
 
 
 
-def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_data, usage_df, reliability_df,
+def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_data, usage_df, reliability_df, sort_col = 'median_importance',
                                          RHO_MIN = 0.3,  Q_MIN = 0.05, DU_MIN = 0.1, n_cores = 16, transcript_col = 'transcript_id'):
     """
     Split the part of net3 into sets where there is evidence for the regulator acting as a splice factor,
@@ -285,7 +285,7 @@ def tf_sf_disambigouation_fully_as_aware(net3_tfsf, regulator_list, transcript_d
         set_d_full['tfsf_category'] = set_d_full.apply(categorize_tfsf, axis=1)
         
         # Sort by median importance
-        set_d_full = set_d_full.sort_values('importance', ascending=False)
+        set_d_full = set_d_full.sort_values(sort_col, ascending=False)
         
     else:
         print('Warning falling back to classifying everything ambigouus')

@@ -56,7 +56,7 @@ def compute_grn(gene_data, target_names, tf_list, client=None, seed = None, num_
 
 
 
-def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = True):
+def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = True, save_dir=None):
     '''
     Performs inference to create gene regulatory networks (GRNs) for transcript-level and gene-level data.
     Optionally aggregates the results from multiple runs.
@@ -82,11 +82,25 @@ def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = T
     
     grns = []
     for i in tqdm(range(n_runs)):
-        grn = compute_grn(gene_data=gene_data,
-                            target_names = target_names,
-                            tf_list = tf_list,
-                            client=client)
-        grns.append(grn)
+        grn_path = os.path.join(save_dir, f"grn_{i}.tsv") if save_dir is not None else None
+
+        if grn_path is not None and os.path.exists(grn_path):
+            grn = pd.read_csv(grn_path, sep="\t")
+        else:
+            grn = compute_grn(
+                gene_data=gene_data,
+                target_names=target_names,
+                tf_list=tf_list,
+                client=client
+            )
+            if grn_path is not None:
+                tmp_path = grn_path + ".tmp"
+                grn.to_csv(tmp_path, sep="\t", index=False)
+                os.replace(tmp_path, grn_path)
+
+    grns.append(grn)
+
+
     
     client.close()
 
