@@ -1,4 +1,5 @@
 import pandas as pd
+from alternet.data_preprocessing import select_supported_isoforms
 
 class TissueNotFoundException(Exception):
     '''
@@ -124,8 +125,6 @@ def clean_GTEX_tissue_transcript_counts(data, biomart, relevant_columns=['transc
     data = data[
         data[relevant_columns[0]].isin(biomart[biomart['Transcript type'] == 'protein_coding'][biomart_column].tolist())]
     
-    threshold = data.shape[1] * 0.1
-    mask = (data == 0).sum(axis=1) > threshold
-    data = data[~mask]
-    
+    data, _ = select_supported_isoforms(data, gene_col=relevant_columns[1], transcript_col=relevant_columns[0])
+
     return data

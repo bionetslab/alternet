@@ -133,16 +133,16 @@ def main():
 
     as_source_grn = pd.read_csv(args.source_as, sep='\t')
     print(as_source_grn)
-    as_source_grn = canonical_names(as_source_grn, tx2gene, gene2tx)
+    as_source_grn = canonical_names(as_source_grn, tx2gene, gene2regtype)
     as_source_grn = filter_edges(as_source_grn, frequency=10, imp_col = 'median_importance')
 
     fully_as_aware = pd.read_csv(args.fully_as, sep='\t')
-    fully_as_aware = canonical_names(fully_as_aware, tx2gene, gene2tx)
+    fully_as_aware = canonical_names(fully_as_aware, tx2gene, gene2regtype)
     fully_as_aware = filter_edges(fully_as_aware,  frequency=10, imp_col = 'median_importance')
 
 
     canonical_grn = pd.read_csv(args.canonical, sep='\t')
-    canonical_grn = canonical_names(canonical_grn, tx2gene, gene2tx)
+    canonical_grn = canonical_names(canonical_grn, tx2gene, gene2regtype)
     canonical_grn = filter_edges(canonical_grn, frequency=10, imp_col = 'median_importance')
 
     print(canonical_grn)

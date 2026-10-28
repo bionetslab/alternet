@@ -1,6 +1,7 @@
 
 import time
-from alternet.inference import inference
+from signifikante.algo import signifikante_fdr
+from distributed import Client, LocalCluster
 from alternet.data_preprocessing import *
 from alternet.annotation import *
 import os.path as op
@@ -147,16 +148,23 @@ def main():
 
 
     print(regulator_transcripts_tf)
-    # GENE-GENE network 
+
+    client = Client(LocalCluster())
+
+    # GENE-GENE network
     # standard GRNboost2 run. Regulators = TFs, gene counts
     if not op.exists(args.canonical):
         print(f"File not found. Running GRN inference for {experiment_name}... using genes as regulators")
         start = time.monotonic()
-        canonical_grn = inference(
-            gene_data=gene_data_scaled,
-            tf_list=regulator_genes_in_data,
-            target_names='all'
+        canonical_grn = signifikante_fdr(
+            expression_data=gene_data_scaled,
+            cluster_representative_mode='medoid',
+            num_target_clusters=1,
+            target_cluster_mode='kmeans',
+            tf_names=regulator_genes_in_data,
+            client_or_address=client
         )
+        canonical_grn = canonical_grn.rename(columns={'TF': 'source'})
         runtime['canonical'] = time.monotonic() - start
         canonical_grn.to_csv(args.canonical, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
@@ -178,11 +186,17 @@ def main():
     if not op.exists(args.source_as):
         print(f"File not found. Running GRN inference for {experiment_name}... using transcripts as regulators")
         start = time.monotonic()
-        as_source_grn = inference(
-            gene_data=hybrid_data,
-            tf_list=regulator_transcripts_tf,
-            target_names=target_genes
+        as_source_grn = signifikante_fdr(
+            expression_data=hybrid_data,
+            cluster_representative_mode='medoid',
+            num_target_clusters=1,
+            target_cluster_mode='kmeans',
+            tf_names=regulator_transcripts_tf,
+            client_or_address=client
         )
+        as_source_grn = as_source_grn.rename(columns={'TF': 'source'})
+        # hybrid data also contains the TF transcripts as columns; keep only gene targets
+        as_source_grn = as_source_grn[as_source_grn['target'].isin(set(target_genes))]
         runtime['as_aware_source'] = time.monotonic() - start
         as_source_grn.to_csv(args.source_as, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
@@ -194,15 +208,21 @@ def main():
     if not op.exists(args.fully_as):
         print(f"File not found. Running GRN inference for {experiment_name}... using transcripts as regulators and targets")
         start = time.monotonic()
-        as_source_grn = inference(
-            gene_data=transcript_data_scaled,
-            tf_list=regulator_transcripts_all,
-            target_names='all'
+        as_source_grn = signifikante_fdr(
+            expression_data=transcript_data_scaled,
+            cluster_representative_mode='medoid',
+            num_target_clusters=1,
+            target_cluster_mode='kmeans',
+            tf_names=regulator_transcripts_all,
+            client_or_address=client
         )
+        as_source_grn = as_source_grn.rename(columns={'TF': 'source'})
         runtime['as_aware_full'] = time.monotonic() - start
 
         as_source_grn.to_csv(args.fully_as, sep='\t', index=False)
         write_dict_to_yaml(runtime, op.join(results_path_tissue, f"{experiment_name}_runtime.yaml"))
+
+    client.close()
 
 
 if __name__ == "__main__":
