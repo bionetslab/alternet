@@ -69,19 +69,20 @@ def read_exon_nodes(exon_file):
     return exons
 
 
-def read_transcript_tpm(tpm_file):
+def read_transcript_tpm(tpm_file, sep=','):
     """
     Reads a merged Salmon transcript TPM table (nf-core/rnaseq *_salmon_transcript_tpm.csv).
 
     The version suffix is removed from the transcript IDs in the 'Name' column.
 
     Parameters:
-        tpm_file (str): Path to the comma-separated TPM table.
+        tpm_file (str): Path to the TPM table.
+        sep (str): Column separator of the table, ',' by default.
 
     Returns:
         pd.DataFrame: transcript_ids (index) x samples.
     """
-    tpm = pd.read_csv(tpm_file, index_col='Name')
+    tpm = pd.read_csv(tpm_file, sep=sep, index_col='Name')
     tpm.index = tpm.index.str.split('.').str[0].rename('transcript_id')
     return tpm
 

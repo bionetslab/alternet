@@ -19,7 +19,7 @@ def psi_sample_name(psi_file):
 def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_file,
                      regulator_types=('TF', 'SF', 'TF_SF'), min_tpm=1.0, min_fraction=0.25, min_reads=5,
                      psi_low=0.05, psi_high=0.95, max_missing=0.5, num_permutations=1000, num_target_clusters=1,
-                     seed=11, client=None):
+                     seed=11, client=None, tpm_sep=','):
     """
     GRN with the informative Whippet nodes of regulator genes (Psi) as regulators and the expressed
     transcripts (TPM) as targets, with signifikante P-values.
@@ -43,6 +43,7 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
         num_target_clusters (int): Number of target clusters for the permutation background.
         seed (int): Random seed for the regressors.
         client (dask.distributed.Client): Dask client. A new local cluster is started if None.
+        tpm_sep (str): Column separator of tpm_file.
 
     Returns:
         tuple: (network, nodes). network has the columns of compute_grn, sources are named
@@ -50,7 +51,7 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
             name in 'source'.
     """
     psi_files = {psi_sample_name(f): f for f in psi_files}
-    tpm = read_transcript_tpm(tpm_file)
+    tpm = read_transcript_tpm(tpm_file, tpm_sep)
     samples = [s for s in tpm.columns if s in psi_files]
     if not samples:
         raise ValueError(f"No sample of the Psi files is a column of {tpm_file}")
@@ -91,7 +92,9 @@ def main():
                         help="Whippet <sample>.psi(.gz) files, one per sample. The sample names must match "
                              "the columns of --tpm_file.")
     parser.add_argument("--tpm_file", type=str, required=True,
-                        help="Merged Salmon transcript TPM table (comma-separated, transcript IDs in 'Name').")
+                        help="Merged Salmon transcript TPM table (transcript IDs in 'Name').")
+    parser.add_argument("--tpm_sep", type=str, default=',',
+                        help="Column separator of --tpm_file, e.g. ',' or 'tab'. Default: ','.")
     parser.add_argument("--gtf", type=str, required=True, help="GTF used for the Whippet index.")
     parser.add_argument("--exon_nodes", type=str, required=True,
                         help="Whippet exon-to-node mapping (graph.exons.tab(.gz) of the Whippet index).")
@@ -119,7 +122,8 @@ def main():
     network, nodes = whippet_node_grn(args.psi_files, args.tpm_file, args.gtf, args.exon_nodes, args.regulator_file,
                                       args.regulator_types, args.min_tpm, args.min_fraction, args.min_reads,
                                       args.psi_low, args.psi_high, args.max_missing, args.num_permutations,
-                                      args.num_target_clusters, args.seed, client)
+                                      args.num_target_clusters, args.seed, client,
+                                      tpm_sep='\t' if args.tpm_sep in ('tab', '\\t') else args.tpm_sep)
     client.close()
 
     network.to_csv(args.output, sep='\t', index=False)
