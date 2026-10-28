@@ -1,4 +1,3 @@
-
 import pandas as pd
 import os.path as op
 import os
@@ -6,130 +5,53 @@ from distributed import Client, LocalCluster
 from signifikante.algo import signifikante_fdr, grnboost2
 from alternet.data_preprocessing import *
 from collections import defaultdict
-from tqdm import tqdm 
+from tqdm import tqdm
 
 
-def compute_grn(gene_data, target_names, tf_list, client=None, seed = None, num_target_cluster = 100, num_permutations=1000):
-    
-    ''' 
-    Computes a gene regulatory network (GRN) using GRNBoost2.
+def compute_grn(gene_data, target_names, tf_list, client=None, seed = 11, num_target_cluster = 1, num_permutations=1000,
+                bootstraps=None, apply_bh_correction=True):
+
+    '''
+    Computes a gene regulatory network (GRN) with GRNBoost2 and empirical P-values (signifikante_fdr).
 
     Parameters:
-        data (pd.DataFrame): Expression data.
-        tf_list (list): List of transcription factors to include.
-        client (dask.distributed.Client): Dask client used to distribute computation across a cluster.
-        file (str): Output file path where the GRN will be saved.
-        use_tf (bool): If True, the transcription factor list is used during network computation. If False, all genes are used.
+        gene_data (pd.DataFrame): Expression data, samples x features. All columns are used as targets
+            during inference.
+        target_names (list or 'all'): Targets to keep in the returned network.
+        tf_list (list): Regulators, a subset of the columns of gene_data.
+        client (dask.distributed.Client): Dask client. A new local cluster is started if None.
+        seed (int): Random seed for the regressors.
+        num_target_cluster (int): Number of target clusters for the permutation background.
+        num_permutations (int): Number of permutations for the empirical P-values.
+        bootstraps (list): Optional bootstrapped expression matrices with the same shape and columns as
+            gene_data. Adds the columns 'shap_mean', 'shap_median', 'shap_std' and 'max_rank_diff'.
+        apply_bh_correction (bool): Adds Benjamini-Hochberg adjusted P-values in 'pvalue_bh'.
 
     Returns:
-        pd.DataFrame: Computed network containing regulatory interactions between genes and/or transcription factors.
-    '''   
-
-
-    if target_names  == 'all':
-        target_names = list(gene_data.columns)
-
-    CHUNK_SIZE = 5000
-
-    network_chunks = []
-    for i in range(0, len(target_names), CHUNK_SIZE):
-        chunk_targets = target_names[i:i + CHUNK_SIZE]
-        
-        print(f"Processing chunk {i // CHUNK_SIZE + 1}: {len(chunk_targets)} targets...")
-        
-        # Compute the network for the current chunk
-        chunk_network = grnboost2(
-            expression_data=gene_data,
-            target_names=chunk_targets,
-            tf_names=tf_list,
-            client_or_address=client
-        )
-        
-        network_chunks.append(chunk_network)
-
-    network = pd.concat(network_chunks, ignore_index=True)
-
-    network.columns = ['source', 'target', 'importance']
-    
-    return network
-
-
-
-
-def inference(gene_data,  tf_list, target_names='all', n_runs = 10, set_seed = True, save_dir=None):
-    '''
-    Performs inference to create gene regulatory networks (GRNs) for transcript-level and gene-level data.
-    Optionally aggregates the results from multiple runs.
-
-    Parameters:
-        config (dict): Configuration dictionary containing paths and settings for the inference process.
-        nruns (int): Number of inference runs to perform.
-        aggregate (bool): Whether to aggregate results from multiple runs. Default is True.
-        set_seed: Automatically sets the seed to the interation index.
-
-    Returns:
-        tuple:
-            - as_aware_grn (pd.DataFrame): Inferred or aggregated AS-aware GRN.
-            - canonical_grn (pd.DataFrame): Inferred or aggregated canonical GRN.
-    
+        pd.DataFrame: Network with columns 'source', 'target', 'importance', 'pvalue' (and 'pvalue_bh',
+            bootstrap columns if requested).
     '''
 
+    if client is None:
+        client = Client(LocalCluster())
+    # signifikante infers the GRN for all columns of gene_data and adds empirical p-values
+    network = signifikante_fdr(
+        expression_data=gene_data,
+        cluster_representative_mode='medoid',
+        num_target_clusters=num_target_cluster,
+        target_cluster_mode='kmeans',
+        tf_names=tf_list,
+        client_or_address=client,
+        seed=seed,
+        num_permutations=num_permutations,
+        apply_bh_correction=apply_bh_correction,
+        bootstraps=bootstraps
+    )
 
+    network = network.rename(columns={'TF': 'source'})
 
-    
-    client = Client(LocalCluster())
+    # signifikante has no target subset for clustered modes, so restrict targets afterwards
+    if target_names != 'all':
+        network = network[network['target'].isin(set(target_names))]
 
-    
-    grns = []
-    for i in tqdm(range(n_runs)):
-        grn_path = os.path.join(save_dir, f"grn_{i}.tsv") if save_dir is not None else None
-
-        if grn_path is not None and os.path.exists(grn_path):
-            grn = pd.read_csv(grn_path, sep="\t")
-        else:
-            grn = compute_grn(
-                gene_data=gene_data,
-                target_names=target_names,
-                tf_list=tf_list,
-                client=client
-            )
-            if grn_path is not None:
-                tmp_path = grn_path + ".tmp"
-                grn.to_csv(tmp_path, sep="\t", index=False)
-                os.replace(tmp_path, grn_path)
-
-    grns.append(grn)
-
-
-    
-    client.close()
-
-    grn = aggregate_results(grns)
-
-    return grn
-
-
-
-def aggregate_results(grn_results):
-    '''
-    Aggregates results from multiple GRN inference
-    Parameters:
-        grn_results (list of pd.DataFrame): Results from multiple GRNBoost runs.
-
-    Returns:
-        pd.DataFrame: Aggregated consensus network.
-    '''
-    
-    combined_df = pd.concat(grn_results, ignore_index=True)
-
-    aggregated_df = combined_df.groupby(['source', 'target'])['importance'].agg(
-        frequency='count',
-        mean_importance='mean',
-        median_importance='median'
-    ).reset_index() 
-    
-    return aggregated_df
-
-
-
-    
+    return network.reset_index(drop=True)
