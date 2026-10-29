@@ -181,6 +181,54 @@ def transcript_nodes(gtf, exon_nodes):
     return transcripts
 
 
+def node_exons(gtf, exon_nodes):
+    """
+    Maps each Whippet node to the annotated exons that contain it.
+
+    Every GTF exon is matched to a potential exon of its gene with the same start and end
+    (as in transcript_nodes). An exon contains all nodes of its potential exon.
+
+    Parameters:
+        gtf (pd.DataFrame): GTF annotation from read_annotation.
+        exon_nodes (pd.DataFrame): Exon-to-node mapping from read_exon_nodes.
+
+    Returns:
+        pd.DataFrame: One row per node and exon with columns 'Gene', 'Node', 'gene_id' and
+            'exon_id'. 'Gene' is the Whippet gene ID (with version), the other IDs are without
+            version. An exon shared by several transcripts occurs once.
+    """
+    exons = gtf.loc[gtf['feature'] == 'exon', ['gene_id', 'exon_id', 'start', 'end']]
+    exons = exons.merge(exon_nodes[['Gene', 'start', 'end', 'nodes']],
+                        left_on=['gene_id', 'start', 'end'], right_on=['Gene', 'start', 'end'])
+    exons = exons.explode('nodes').rename(columns={'nodes': 'Node'})
+    exons['Node'] = exons['Node'].astype(int)
+    for column in ['gene_id', 'exon_id']:
+        exons[column] = exons[column].str.split('.').str[0]
+    return exons[['Gene', 'Node', 'gene_id', 'exon_id']].drop_duplicates().reset_index(drop=True)
+
+
+def map_node_sources(network, exons):
+    """
+    Replaces the Whippet node sources '<gene>:<node>' of a network by the exons that contain them.
+
+    Every edge is repeated once per exon of its source node.
+
+    Parameters:
+        network (pd.DataFrame): Network with 'source' named '<gene>:<node>' (gene without version).
+        exons (pd.DataFrame): Output of node_exons.
+
+    Returns:
+        pd.DataFrame: The network with 'source' replaced by 'source_gene', 'source_node' and
+            'source_exon'. Edges whose node is not in any annotated exon keep NaN exon.
+    """
+    node = network['source'].str.split(':', expand=True)
+    network = network.assign(source_gene=node[0], source_node=node[1].astype(int))
+    exons = exons.rename(columns={'gene_id': 'source_gene', 'Node': 'source_node', 'exon_id': 'source_exon'})
+    network = network.merge(exons.drop(columns='Gene'), how='left', on=['source_gene', 'source_node'])
+    columns = ['source_gene', 'source_node', 'source_exon']
+    return network[columns + [c for c in network.columns if c not in columns + ['source']]]
+
+
 def informative_nodes(variable, expressed, transcripts, regulator_genes):
     """
     Finds the variable nodes of regulator genes that split the expressed isoforms in two groups.

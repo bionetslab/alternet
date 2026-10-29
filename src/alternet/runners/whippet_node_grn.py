@@ -7,8 +7,9 @@ from distributed import Client, LocalCluster
 from alternet.data_preprocessing import standardize_dataframe
 from alternet.genome_annotation import read_annotation
 from alternet.inference import compute_grn
-from alternet.informative_exons import (informative_nodes, is_expressed, node_psi_matrix, read_exon_nodes,
-                                        read_transcript_tpm, transcript_nodes, variable_nodes)
+from alternet.informative_exons import (informative_nodes, is_expressed, map_node_sources, node_exons,
+                                        node_psi_matrix, read_exon_nodes, read_transcript_tpm, transcript_nodes,
+                                        variable_nodes)
 
 
 def psi_sample_name(psi_file):
@@ -46,15 +47,17 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
         tpm_sep (str): Column separator of tpm_file.
 
     Returns:
-        tuple: (network, nodes). network has the columns of compute_grn, sources are named
-            '<gene>:<node>'. nodes are the informative nodes (see informative_nodes) with their
+        tuple: (network, nodes). network has the columns of compute_grn, with 'source' replaced by
+            'source_gene', 'source_node' and 'source_exon' (one row per exon containing the
+            source node, see map_node_sources). nodes are the informative nodes (see informative_nodes) with their
             name in 'source'.
     """
     psi_files = {psi_sample_name(f): f for f in psi_files}
     tpm = read_transcript_tpm(tpm_file, tpm_sep)
     samples = [s for s in tpm.columns if s in psi_files]
     if not samples:
-        raise ValueError(f"No sample of the Psi files is a column of {tpm_file}")
+        raise ValueError(f"No sample of the Psi files is a column of {tpm_file}. "
+                         f"Psi samples: {list(psi_files)[:5]}, TPM columns: {list(tpm.columns)[:5]}")
     print(f"{len(samples)} samples with Psi and TPM ({len(psi_files)} Psi files, {tpm.shape[1]} TPM columns)")
     psi_files = {s: psi_files[s] for s in samples}
     tpm = tpm[samples]
@@ -64,7 +67,9 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
 
     expressed = is_expressed(tpm, min_tpm, min_fraction).to_frame('study')
     variable = variable_nodes({'study': list(psi_files.values())}, min_fraction, min_reads, psi_low, psi_high)
-    transcripts = transcript_nodes(read_annotation(gtf_file, features={'exon'}), read_exon_nodes(exon_nodes_file))
+    gtf = read_annotation(gtf_file, features={'exon'})
+    exon_nodes = read_exon_nodes(exon_nodes_file)
+    transcripts = transcript_nodes(gtf, exon_nodes)
     nodes = informative_nodes(variable, expressed, transcripts, regulator_genes)
     nodes['source'] = nodes['Gene'].str.split('.').str[0] + ':' + nodes['Node'].astype(str)
 
@@ -80,6 +85,7 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
 
     network = compute_grn(data, list(targets.columns), list(psi.columns), client=client, seed=seed,
                           num_target_cluster=num_target_clusters, num_permutations=num_permutations)
+    network = map_node_sources(network, node_exons(gtf, exon_nodes))
     return network, nodes
 
 
