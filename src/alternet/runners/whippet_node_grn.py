@@ -4,6 +4,7 @@ import os.path as op
 import pandas as pd
 from distributed import Client, LocalCluster
 
+from alternet.benchmark import Benchmark
 from alternet.data_preprocessing import standardize_dataframe
 from alternet.genome_annotation import read_annotation
 from alternet.inference import compute_grn
@@ -20,7 +21,7 @@ def psi_sample_name(psi_file):
 def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_file,
                      regulator_types=('TF', 'SF', 'TF_SF'), min_tpm=1.0, min_fraction=0.25, min_reads=5,
                      psi_low=0.05, psi_high=0.95, max_missing=0.5, num_permutations=1000, num_target_clusters=1,
-                     seed=11, client=None, tpm_sep=','):
+                     seed=11, client=None, tpm_sep=',', benchmark=None):
     """
     GRN with the informative Whippet nodes of regulator genes (Psi) as regulators and the expressed
     transcripts (TPM) as targets, with signifikante P-values.
@@ -45,6 +46,7 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
         seed (int): Random seed for the regressors.
         client (dask.distributed.Client): Dask client. A new local cluster is started if None.
         tpm_sep (str): Column separator of tpm_file.
+        benchmark (Benchmark): Records run time and memory of each step. A new one is used if None.
 
     Returns:
         tuple: (network, nodes). network has the columns of compute_grn, with 'source' replaced by
@@ -52,40 +54,55 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
             source node, see map_node_sources). nodes are the informative nodes (see informative_nodes) with their
             name in 'source'.
     """
-    psi_files = {psi_sample_name(f): f for f in psi_files}
-    tpm = read_transcript_tpm(tpm_file, tpm_sep)
-    samples = [s for s in tpm.columns if s in psi_files]
-    if not samples:
-        raise ValueError(f"No sample of the Psi files is a column of {tpm_file}. "
-                         f"Psi samples: {list(psi_files)[:5]}, TPM columns: {list(tpm.columns)[:5]}")
-    print(f"{len(samples)} samples with Psi and TPM ({len(psi_files)} Psi files, {tpm.shape[1]} TPM columns)")
-    psi_files = {s: psi_files[s] for s in samples}
-    tpm = tpm[samples]
+    if benchmark is None:
+        benchmark = Benchmark()
 
-    regulators = pd.read_csv(regulator_file, sep='\t')
-    regulator_genes = set(regulators.loc[regulators['Regulator_type'].isin(regulator_types), 'Gene stable ID'])
+    with benchmark.step('read_inputs') as info:
+        psi_files = {psi_sample_name(f): f for f in psi_files}
+        tpm = read_transcript_tpm(tpm_file, tpm_sep)
+        samples = [s for s in tpm.columns if s in psi_files]
+        if not samples:
+            raise ValueError(f"No sample of the Psi files is a column of {tpm_file}. "
+                             f"Psi samples: {list(psi_files)[:5]}, TPM columns: {list(tpm.columns)[:5]}")
+        print(f"{len(samples)} samples with Psi and TPM ({len(psi_files)} Psi files, {tpm.shape[1]} TPM columns)")
+        psi_files = {s: psi_files[s] for s in samples}
+        tpm = tpm[samples]
 
-    expressed = is_expressed(tpm, min_tpm, min_fraction).to_frame('study')
-    variable = variable_nodes({'study': list(psi_files.values())}, min_fraction, min_reads, psi_low, psi_high)
-    gtf = read_annotation(gtf_file, features={'exon'})
-    exon_nodes = read_exon_nodes(exon_nodes_file)
-    transcripts = transcript_nodes(gtf, exon_nodes)
-    nodes = informative_nodes(variable, expressed, transcripts, regulator_genes)
-    nodes['source'] = nodes['Gene'].str.split('.').str[0] + ':' + nodes['Node'].astype(str)
+        regulators = pd.read_csv(regulator_file, sep='\t')
+        regulator_genes = set(regulators.loc[regulators['Regulator_type'].isin(regulator_types), 'Gene stable ID'])
+        info.update(n_samples=len(samples), n_transcripts=tpm.shape[0])
 
-    psi = node_psi_matrix(psi_files, nodes, min_reads)
-    psi = psi.loc[:, psi.isna().mean() <= max_missing]
-    psi = psi.fillna(psi.mean())
-    psi.columns = [f"{gene.split('.')[0]}:{node}" for gene, node in psi.columns]
-    print(f"{nodes.shape[0]} informative nodes, {psi.shape[1]} with Psi in enough samples")
+    with benchmark.step('select_nodes') as info:
+        expressed = is_expressed(tpm, min_tpm, min_fraction).to_frame('study')
+        variable = variable_nodes({'study': list(psi_files.values())}, min_fraction, min_reads, psi_low, psi_high)
+        gtf = read_annotation(gtf_file, features={'exon'})
+        exon_nodes = read_exon_nodes(exon_nodes_file)
+        transcripts = transcript_nodes(gtf, exon_nodes)
+        nodes = informative_nodes(variable, expressed, transcripts, regulator_genes)
+        nodes['source'] = nodes['Gene'].str.split('.').str[0] + ':' + nodes['Node'].astype(str)
+        info.update(n_variable_nodes=int(variable['study'].sum()), n_informative_nodes=nodes.shape[0])
 
-    targets = tpm.loc[expressed['study']].T
-    print(f"{targets.shape[1]} expressed target transcripts")
-    data = standardize_dataframe(pd.concat([psi, targets], axis=1))
+    with benchmark.step('psi_matrix') as info:
+        psi = node_psi_matrix(psi_files, nodes, min_reads)
+        psi = psi.loc[:, psi.isna().mean() <= max_missing]
+        psi = psi.fillna(psi.mean())
+        psi.columns = [f"{gene.split('.')[0]}:{node}" for gene, node in psi.columns]
+        print(f"{nodes.shape[0]} informative nodes, {psi.shape[1]} with Psi in enough samples")
 
-    network = compute_grn(data, list(targets.columns), list(psi.columns), client=client, seed=seed,
-                          num_target_cluster=num_target_clusters, num_permutations=num_permutations)
-    network = map_node_sources(network, node_exons(gtf, exon_nodes))
+        targets = tpm.loc[expressed['study']].T
+        print(f"{targets.shape[1]} expressed target transcripts")
+        data = standardize_dataframe(pd.concat([psi, targets], axis=1))
+        info.update(n_regulators=psi.shape[1], n_targets=targets.shape[1])
+
+    with benchmark.step('inference', n_regulators=psi.shape[1], n_targets=targets.shape[1],
+                        num_permutations=num_permutations) as info:
+        network = compute_grn(data, list(targets.columns), list(psi.columns), client=client, seed=seed,
+                              num_target_cluster=num_target_clusters, num_permutations=num_permutations)
+        info.update(n_edges=len(network))
+
+    with benchmark.step('map_exons') as info:
+        network = map_node_sources(network, node_exons(gtf, exon_nodes))
+        info.update(n_rows=len(network))
     return network, nodes
 
 
@@ -119,23 +136,33 @@ def main():
     parser.add_argument("--max_missing", type=float, default=0.5,
                         help="Maximal fraction of samples without a Psi value for a regulator node. "
                              "Remaining missing values are filled with the node's mean Psi.")
+    parser.add_argument("--benchmark", type=str, required=False,
+                        help="Optional TSV with wall time, CPU time and peak memory (this process and its "
+                             "dask workers) of each step.")
     parser.add_argument("--num_permutations", type=int, default=1000)
     parser.add_argument("--num_target_clusters", type=int, default=1)
     parser.add_argument("--seed", type=int, default=11)
     args = parser.parse_args()
 
-    client = Client(LocalCluster())
+    benchmark = Benchmark()
+    with benchmark.step('start_cluster') as info:
+        client = Client(LocalCluster())
+        info.update(n_workers=len(client.scheduler_info()['workers']), n_threads=sum(client.nthreads().values()))
     network, nodes = whippet_node_grn(args.psi_files, args.tpm_file, args.gtf, args.exon_nodes, args.regulator_file,
                                       args.regulator_types, args.min_tpm, args.min_fraction, args.min_reads,
                                       args.psi_low, args.psi_high, args.max_missing, args.num_permutations,
                                       args.num_target_clusters, args.seed, client,
-                                      tpm_sep='\t' if args.tpm_sep in ('tab', '\\t') else args.tpm_sep)
+                                      tpm_sep='\t' if args.tpm_sep in ('tab', '\\t') else args.tpm_sep,
+                                      benchmark=benchmark)
     client.close()
 
-    network.to_csv(args.output, sep='\t', index=False)
+    with benchmark.step('write_output'):
+        network.to_csv(args.output, sep='\t', index=False)
     print(f"Wrote {len(network)} edges to {args.output}")
     if args.nodes_output is not None:
         nodes.to_csv(args.nodes_output, sep='\t', index=False)
+    if args.benchmark is not None:
+        benchmark.table().to_csv(args.benchmark, sep='\t', index=False)
 
 
 if __name__ == "__main__":
