@@ -9,7 +9,7 @@ from pytximport.utils import convert_counts_to_tpm
 def salmon_sample_name(quant_path):
     """
     Returns the sample name of a Salmon output: the name of the directory that holds quant.sf
-    (nf-core/rnaseq layout salmon/<sample>/quant.sf).
+    (nf-core/rnaseq layout salmon/<sample>/quant.sf), or <sample> in the layout <sample>/counts/salmon/quant.sf.
 
     Parameters:
         quant_path (str): Salmon output directory or its quant.sf file.
@@ -17,8 +17,11 @@ def salmon_sample_name(quant_path):
     Returns:
         str: Sample name.
     """
-    quant_dir = quant_path if op.isdir(quant_path) else op.dirname(quant_path)
-    return op.basename(op.normpath(quant_dir))
+    quant_dir = op.normpath(quant_path if op.isdir(quant_path) else op.dirname(quant_path))
+    parent = op.dirname(quant_dir)
+    if op.basename(quant_dir) == 'salmon' and op.basename(parent) == 'counts':
+        return op.basename(op.dirname(parent))
+    return op.basename(quant_dir)
 
 
 def read_salmon_tpm(quant_dirs):
