@@ -3,14 +3,15 @@ import os.path as op
 
 import pandas as pd
 from distributed import Client, LocalCluster
+from sklearn.preprocessing import StandardScaler
 
 from alternet.benchmark import Benchmark
-from alternet.data_preprocessing import standardize_dataframe
 from alternet.genome_annotation import read_annotation
 from alternet.inference import compute_grn
 from alternet.informative_exons import (informative_nodes, is_expressed, map_node_sources, node_exons,
                                         node_psi_matrix, read_exon_nodes, read_transcript_tpm, transcript_nodes,
                                         variable_nodes)
+from alternet.salmon_bootstraps import read_salmon_bootstraps, salmon_sample_name
 
 
 def psi_sample_name(psi_file):
@@ -21,10 +22,15 @@ def psi_sample_name(psi_file):
 def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_file,
                      regulator_types=('TF', 'SF', 'TF_SF'), min_tpm=1.0, min_fraction=0.25, min_reads=5,
                      psi_low=0.05, psi_high=0.95, max_missing=0.5, num_permutations=1000, num_target_clusters=1,
-                     seed=11, client=None, tpm_sep=',', benchmark=None):
+                     seed=11, client=None, tpm_sep=',', benchmark=None, quant_dirs=None):
     """
     GRN with the informative Whippet nodes of regulator genes (Psi) as regulators and the expressed
     transcripts (TPM) as targets, with signifikante P-values.
+
+    With quant_dirs, the Salmon inferential replicates (Gibbs samples or bootstraps) of the targets are
+    passed to signifikante as bootstraps: replicate b holds the b-th replicate TPM of every sample's
+    targets, next to the unchanged Psi (Whippet has no replicates), scaled with the point estimate's
+    StandardScaler. This adds the columns 'shap_mean', 'shap_median', 'shap_std' and 'max_rank_diff'.
 
     Parameters:
         psi_files (list): Whippet <sample>.psi(.gz) files, one per sample. The sample names must match
@@ -47,6 +53,9 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
         client (dask.distributed.Client): Dask client. A new local cluster is started if None.
         tpm_sep (str): Column separator of tpm_file.
         benchmark (Benchmark): Records run time and memory of each step. A new one is used if None.
+        quant_dirs (list): Optional Salmon output directories with aux_info/bootstrap/ (salmon quant
+            --numGibbsSamples or --numBootstraps), one per sample, named as in salmon_sample_name.
+            Every sample with Psi and TPM needs one.
 
     Returns:
         tuple: (network, nodes). network has the columns of compute_grn, with 'source' replaced by
@@ -91,13 +100,32 @@ def whippet_node_grn(psi_files, tpm_file, gtf_file, exon_nodes_file, regulator_f
 
         targets = tpm.loc[expressed['study']].T
         print(f"{targets.shape[1]} expressed target transcripts")
-        data = standardize_dataframe(pd.concat([psi, targets], axis=1))
+        data = pd.concat([psi, targets], axis=1)
+        scaler = StandardScaler().fit(data)
+        data = pd.DataFrame(scaler.transform(data), index=data.index, columns=data.columns)
         info.update(n_regulators=psi.shape[1], n_targets=targets.shape[1])
 
+    bootstraps = None
+    if quant_dirs is not None:
+        with benchmark.step('read_bootstraps') as info:
+            quant_dirs = {salmon_sample_name(d): d for d in quant_dirs}
+            missing = [s for s in data.index if s not in quant_dirs]
+            if missing:
+                raise ValueError(f"{len(missing)} samples have no Salmon output directory: {missing[:5]}")
+            replicates = read_salmon_bootstraps({s: quant_dirs[s] for s in data.index}, list(targets.columns))
+            # The models are trained on the standardized point estimates, so the replicates get the same scaling
+            bootstraps = [pd.DataFrame(scaler.transform(pd.concat([psi, b.loc[data.index]], axis=1)),
+                                       index=data.index, columns=data.columns)
+                          for b in replicates]
+            print(f"{len(bootstraps)} Salmon replicates of the targets")
+            info.update(n_bootstraps=len(bootstraps))
+
     with benchmark.step('inference', n_regulators=psi.shape[1], n_targets=targets.shape[1],
-                        num_permutations=num_permutations) as info:
+                        num_permutations=num_permutations,
+                        n_bootstraps=0 if bootstraps is None else len(bootstraps)) as info:
         network = compute_grn(data, list(targets.columns), list(psi.columns), client=client, seed=seed,
-                              num_target_cluster=num_target_clusters, num_permutations=num_permutations)
+                              num_target_cluster=num_target_clusters, num_permutations=num_permutations,
+                              bootstraps=bootstraps)
         info.update(n_edges=len(network))
 
     with benchmark.step('map_exons') as info:
@@ -118,6 +146,10 @@ def main():
                         help="Merged Salmon transcript TPM table (transcript IDs in 'Name').")
     parser.add_argument("--tpm_sep", type=str, default=',',
                         help="Column separator of --tpm_file, e.g. ',' or 'tab'. Default: ','.")
+    parser.add_argument("--quant_dirs", type=str, nargs='+', required=False,
+                        help="Optional Salmon output directories (<sample>/counts/salmon or <sample>/ with "
+                             "quant.sf and aux_info/bootstrap/), one per sample: their Gibbs samples / "
+                             "bootstraps of the targets add the bootstrap SHAP columns.")
     parser.add_argument("--gtf", type=str, required=True, help="GTF used for the Whippet index.")
     parser.add_argument("--exon_nodes", type=str, required=True,
                         help="Whippet exon-to-node mapping (graph.exons.tab(.gz) of the Whippet index).")
@@ -153,7 +185,7 @@ def main():
                                       args.psi_low, args.psi_high, args.max_missing, args.num_permutations,
                                       args.num_target_clusters, args.seed, client,
                                       tpm_sep='\t' if args.tpm_sep in ('tab', '\\t') else args.tpm_sep,
-                                      benchmark=benchmark)
+                                      benchmark=benchmark, quant_dirs=args.quant_dirs)
     client.close()
 
     with benchmark.step('write_output'):

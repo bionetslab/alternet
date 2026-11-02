@@ -44,11 +44,18 @@ for COND_DIR in "$OUT_DIR"/*/; do
     [[ $COND == networks ]] && continue
     TPM_FILE=$(ls "$COND_DIR"counts/*_salmon_transcript_tpm.csv)
     echo "=== $COND: $(ls -d "$COND_DIR"*/counts | wc -l) samples"
+    # Salmon replicates (Gibbs samples / bootstraps) are used only if every sample of the condition has them
+    N_QUANT=$(find "$COND_DIR" -mindepth 3 -maxdepth 3 -path '*/counts/salmon' -type d | wc -l)
+    N_BOOT=$(find "$COND_DIR" -mindepth 6 -maxdepth 6 -path '*/counts/salmon/aux_info/bootstrap/bootstraps.gz' | wc -l)
+    QUANT_ARGS=()
+    if [[ $N_BOOT -eq $N_QUANT && $N_QUANT -gt 0 ]]; then
+        QUANT_ARGS=(--quant_dirs "$COND_DIR"*/counts/salmon)
+    fi
 
     OUT=$NET_DIR/$COND.whippet_node_grn.tsv
     if [[ ! -f $OUT ]]; then
         python -m alternet.runners.whippet_node_grn \
-            --psi_files "$COND_DIR"*/counts/whippet/*.psi.gz --tpm_file "$TPM_FILE" \
+            --psi_files "$COND_DIR"*/counts/whippet/*.psi.gz --tpm_file "$TPM_FILE" "${QUANT_ARGS[@]}" \
             --gtf "$GTF" --exon_nodes "$EXON_NODES" --regulator_file "$REGULATORS" \
             --output "$OUT" --nodes_output "$NET_DIR/$COND.whippet_nodes.tsv" \
             --benchmark "$NET_DIR/$COND.whippet_node_grn.benchmark.tsv" "${EXTRA_ARGS[@]}"
@@ -63,14 +70,12 @@ for COND_DIR in "$OUT_DIR"/*/; do
 
     OUT=$NET_DIR/$COND.salmon_bootstrap_grn.tsv
     if [[ ! -f $OUT ]]; then
-        N_QUANT=$(find "$COND_DIR" -mindepth 3 -maxdepth 3 -path '*/counts/salmon' -type d | wc -l)
-        N_BOOT=$(find "$COND_DIR" -mindepth 6 -maxdepth 6 -path '*/counts/salmon/aux_info/bootstrap/bootstraps.gz' | wc -l)
-        if [[ $N_BOOT -eq $N_QUANT ]]; then
+        if [[ ${#QUANT_ARGS[@]} -gt 0 ]]; then
             python -m alternet.runners.salmon_bootstrap_grn \
                 --quant_dirs "$COND_DIR"*/counts/salmon --regulator_file "$REGULATORS" \
                 --output "$OUT" --benchmark "$NET_DIR/$COND.salmon_bootstrap_grn.benchmark.tsv" "${EXTRA_ARGS[@]}"
         else
-            echo "Skipping salmon_bootstrap_grn for $COND: $N_BOOT of $N_QUANT samples have Salmon bootstraps (salmon quant --numBootstraps)"
+            echo "Skipping salmon_bootstrap_grn for $COND: $N_BOOT of $N_QUANT samples have Salmon replicates (salmon quant --numGibbsSamples / --numBootstraps)"
         fi
     fi
 done
